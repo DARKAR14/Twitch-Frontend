@@ -16,6 +16,8 @@ import { usePermissions } from "../context/PermissionsContext";
 import ModPermissionsPanel from "./ModPermissionsPanel";
 import SpotifyPanel from "./SpotifyPanel";
 import VIPManager from "./VIPManager";
+import Birthdays from "./Birthdays";
+import TTSPanel from "./TTSPanel";
 import "../styles/dashboard.css";
 
 export default function Dashboard() {
