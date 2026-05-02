@@ -94,7 +94,6 @@ export default function Dashboard() {
         ...(canSee("eventsub") ? [{ id: "eventsub", label: "EventSub", icon: "bolt" }] : []),
         ...(canSee("chan-history") ? [{ id: "chan-history", label: "Historial cambios", icon: "clock" }] : []),
         ...(canSee("vip")         ? [{ id: "vip",          label: "VIP Manager",       icon: "star"  }] : []),
-        
       ],
     },
   ];
