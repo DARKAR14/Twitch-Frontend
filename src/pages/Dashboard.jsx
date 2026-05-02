@@ -82,8 +82,8 @@ export default function Dashboard() {
         ...(isMod && canSee("moderation") ? [{ id: "moderation", label: "Log de actividad", icon: "shield" }] : []),
         ...(isMod && canSee("chat")       ? [{ id: "chat",       label: "Chat controls",    icon: "chat"   }] : []),
         ...(isMod && canSee("spotify")    ? [{ id: "spotify",    label: "Spotify",          icon: "music"  }] : []),
-        ...(isMod && canSee("birthdays")                         ? [{ id: "birthdays",  label: "Cumpleaños",       icon: "cake"   }] : []),
-        ...(isMod && canSee("tts")        ? [{ id: "tts",        label: "TTS Bot",          icon: "tts"    }] : []),
+        ...(isMod ? canSee("birthdays")                         ? [{ id: "birthdays",  label: "Cumpleaños",       icon: "cake"   }] : []),
+        ...(isMod ? canSee("tts")        ? [{ id: "tts",        label: "TTS Bot",          icon: "tts"    }] : []),
       ],
     },
     {
