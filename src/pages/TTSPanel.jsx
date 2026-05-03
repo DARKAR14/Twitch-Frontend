@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../lib/api";
 
 const BOT_WS_URL = import.meta.env.VITE_BOT_WS_URL || "ws://localhost:3000";
+const BOT_API_URL = import.meta.env.VITE_BOT_API_URL || "http://localhost:3000";
 
 const FLAGS = { es: "🇪🇸", en: "🇺🇸", ja: "🇯🇵", ru: "🇷🇺", pt: "🇧🇷" };
 const LANG_NAMES = { es: "Español", en: "Inglés", ja: "Japonés", ru: "Ruso", pt: "Portugués" };
@@ -16,20 +17,24 @@ export default function TTSPanel() {
   const [loading, setLoading]   = useState(true);
   const wsRef = useRef(null);
 
-  // ── Cargar datos iniciales ─────────────────────────────────
+  // ── Cargar datos iniciales ─────────────────────────────────────
   const fetchData = useCallback(async () => {
     try {
-      // Obtener datos de TTS desde MongoDB (backend)
+      // Obtener datos de TTS desde MongoDB (backend principal)
       const ttsRes = await api.get("/tts/cola");
       setCola(ttsRes.data.mensajes || []);
       setStats(ttsRes.data.stats);
 
-      // Intentar obtener stats del bot (websocket, OBS)
+      // Intentar obtener stats del bot (render independiente)
       try {
-        const botRes = await api.get(`${import.meta.env.VITE_BOT_WS_URL || "http://localhost:3000"}/stats`);
-        setBotStats(botRes.data);
+        const botRes = await fetch(`${BOT_API_URL}/stats`);
+        if (botRes.ok) {
+          const botData = await botRes.json();
+          setBotStats(botData);
+        }
       } catch {
-        // Bot puede estar offline
+        // Bot puede estar dormido en Render (plan gratuito)
+        setBotStats(null);
       }
     } catch (err) {
       console.error("Error cargando TTS", err.message);
@@ -40,32 +45,37 @@ export default function TTSPanel() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── WebSocket al bot ───────────────────────────────────────
+  // ── WebSocket al bot ───────────────────────────────────────────
   useEffect(() => {
     function conectar() {
-      const ws = new WebSocket(BOT_WS_URL);
-      wsRef.current = ws;
+      try {
+        const ws = new WebSocket(BOT_WS_URL);
+        wsRef.current = ws;
 
-      ws.onopen = () => {
-        setWsStatus("connected");
-      };
+        ws.onopen = () => {
+          setWsStatus("connected");
+        };
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.tipo === "nuevo") {
-            setCurrent(data);
-            fetchData();
-          }
-        } catch {}
-      };
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.tipo === "nuevo") {
+              setCurrent(data);
+              fetchData();
+            }
+          } catch {}
+        };
 
-      ws.onclose = () => {
+        ws.onclose = () => {
+          setWsStatus("disconnected");
+          setTimeout(conectar, 3000);
+        };
+
+        ws.onerror = () => ws.close();
+      } catch {
         setWsStatus("disconnected");
-        setTimeout(conectar, 3000);
-      };
-
-      ws.onerror = () => ws.close();
+        setTimeout(conectar, 5000);
+      }
     }
 
     conectar();
@@ -78,7 +88,7 @@ export default function TTSPanel() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // ── Acciones ───────────────────────────────────────────────
+  // ── Acciones ───────────────────────────────────────────────────
   async function limpiarCola() {
     try {
       await api.delete("/tts");
@@ -132,6 +142,20 @@ export default function TTSPanel() {
           color="var(--text1)"
         />
       </div>
+
+      {/* Banner si el bot está dormido */}
+      {wsStatus === "disconnected" && (
+        <div style={{
+          padding: "12px 16px",
+          background: "rgba(255,140,0,0.08)",
+          border: "1px solid rgba(255,140,0,0.3)",
+          borderRadius: "var(--radius-sm)",
+          fontSize: "13px",
+          color: "#FF8C00",
+        }}>
+          ⚠ El bot TTS puede estar iniciando (Render plan gratuito puede tardar ~30s). Reconectando automáticamente...
+        </div>
+      )}
 
       {/* ── Fila principal ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "20px", alignItems: "start" }}>
@@ -263,7 +287,7 @@ export default function TTSPanel() {
             </div>
           </div>
 
-          {/* OBS clientes */}
+          {/* OBS clientes — solo si el bot está online */}
           {botStats?.websocket?.clientes?.length > 0 && (
             <div className="card">
               <div className="card-title">Clientes OBS</div>
