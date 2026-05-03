@@ -68,12 +68,13 @@ export default function Dashboard() {
   const isAdmin = user.role === "admin";
   const isMod   = user.role === "moderator" || user.role === "admin";
 
+  // ── FIX: navSections sin ternarios anidados rotos ──────────────
   const navSections = [
     {
       label: "Stream",
       items: [
-        ...(isMod                           ? [{ id: "channel",     label: "Canal en vivo", icon: "broadcast" }] : []),
-        ...(isMod && canSee("clips")        ? [{ id: "clips-today", label: "Clips",         icon: "clips"     }] : []),
+        ...(isMod                          ? [{ id: "channel",     label: "Canal en vivo", icon: "broadcast" }] : []),
+        ...(isMod && canSee("clips")       ? [{ id: "clips-today", label: "Clips",         icon: "clips"     }] : []),
       ],
     },
     {
@@ -82,18 +83,18 @@ export default function Dashboard() {
         ...(isMod && canSee("moderation") ? [{ id: "moderation", label: "Log de actividad", icon: "shield" }] : []),
         ...(isMod && canSee("chat")       ? [{ id: "chat",       label: "Chat controls",    icon: "chat"   }] : []),
         ...(isMod && canSee("spotify")    ? [{ id: "spotify",    label: "Spotify",          icon: "music"  }] : []),
-        ...(isMod ? canSee("birthdays")                         ? [{ id: "birthdays",  label: "Cumpleaños",       icon: "cake"   }] : []),
-        ...(isMod && canSee("tts")       ? [{ id: "tts",       label: "TTS Bot",    icon: "tts"  }] : []),
+        ...(isMod && canSee("birthdays")  ? [{ id: "birthdays",  label: "Cumpleaños",       icon: "cake"   }] : []),
+        ...(isMod && canSee("tts")        ? [{ id: "tts",        label: "TTS Bot",          icon: "tts"    }] : []),
       ],
     },
     {
       label: "Admin",
       items: [
-        ...(canSee("modperms") ? [{ id: "modperms", label: "Panel permisos", icon: "key" }] : []),
-        ...(canSee("modteam") ? [{ id: "modteam", label: "Equipo mod", icon: "team" }] : []),
-        ...(canSee("eventsub") ? [{ id: "eventsub", label: "EventSub", icon: "bolt" }] : []),
-        ...(canSee("chan-history") ? [{ id: "chan-history", label: "Historial cambios", icon: "clock" }] : []),
-        ...(canSee("vip")         ? [{ id: "vip",          label: "VIP Manager",       icon: "star"  }] : []),
+        ...(canSee("modperms")    ? [{ id: "modperms",     label: "Panel permisos",   icon: "key"   }] : []),
+        ...(canSee("modteam")     ? [{ id: "modteam",      label: "Equipo mod",       icon: "team"  }] : []),
+        ...(canSee("eventsub")    ? [{ id: "eventsub",     label: "EventSub",         icon: "bolt"  }] : []),
+        ...(canSee("chan-history") ? [{ id: "chan-history", label: "Historial cambios",icon: "clock" }] : []),
+        ...(canSee("vip")         ? [{ id: "vip",          label: "VIP Manager",      icon: "star"  }] : []),
       ],
     },
   ];
@@ -230,22 +231,22 @@ export default function Dashboard() {
           </div>
         )}
 
-        {page === "clips-today" && isMod && canSee("clips") && <ClipsViewer initialTab="today" />}
-        {page === "moderation" && isMod && canSee("moderation") && <ModerationLog />}
-        {page === "chat" && isMod && canSee("chat") && <ChatControls />}
-        {page === "modperms" && canSee("modperms") && <ModPermissionsPanel />}
-        {page === "modteam" && canSee("modteam") && <ModManager />}
-        {page === "eventsub" && canSee("eventsub") && <EventSubPanel />}
-        {page === "chan-history" && canSee("chan-history") && (
+        {page === "clips-today"  && isMod && canSee("clips")      && <ClipsViewer initialTab="today" />}
+        {page === "moderation"   && isMod && canSee("moderation")  && <ModerationLog />}
+        {page === "chat"         && isMod && canSee("chat")        && <ChatControls />}
+        {page === "modperms"     && canSee("modperms")             && <ModPermissionsPanel />}
+        {page === "modteam"      && canSee("modteam")              && <ModManager />}
+        {page === "eventsub"     && canSee("eventsub")             && <EventSubPanel />}
+        {page === "chan-history"  && canSee("chan-history")         && (
           <div className="card">
             <div className="card-title">{SVG.clock} Historial completo de cambios</div>
             <ChannelHistory />
           </div>
         )}
-        {page === "spotify"      && canSee("spotify")               && <SpotifyPanel />}
-        {page === "vip"          && canSee("vip")                   && <VIPManager />}
-        {page === "birthdays"    && isMod                           && <Birthdays />}
-        {page === "tts"          && isMod && canSee("tts")          && <TTSPanel />}
+        {page === "spotify"      && canSee("spotify")              && <SpotifyPanel />}
+        {page === "vip"          && canSee("vip")                  && <VIPManager />}
+        {page === "birthdays"    && isMod && canSee("birthdays")   && <Birthdays />}
+        {page === "tts"          && isMod && canSee("tts")         && <TTSPanel />}
       </main>
     </div>
   );
