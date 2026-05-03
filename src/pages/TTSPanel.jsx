@@ -1,6 +1,12 @@
 // src/pages/TTSPanel.jsx
 import { useState, useEffect, useCallback, useRef } from "react";
-import { api } from "../lib/api";
+import axios from "axios";
+
+// ── Cliente apuntando al bot TTS (puede ser un Render distinto) ──
+const ttsApi = axios.create({
+  baseURL: import.meta.env.VITE_TTS_URL || import.meta.env.VITE_API_URL || "http://localhost:3000",
+  withCredentials: false, // el bot TTS no maneja sesiones
+});
 
 const LANG_META = {
   es: { flag: "🇪🇸", name: "Español",    cmd: "!habla",    color: "#FF6B6B" },
@@ -27,7 +33,6 @@ function timeAgo(isoStr) {
   return `hace ${Math.floor(m / 60)}h`;
 }
 
-// ── Stat Card ──────────────────────────────────────────────────
 function StatCard({ label, value, sub, color, icon }) {
   return (
     <div style={{
@@ -49,8 +54,7 @@ function StatCard({ label, value, sub, color, icon }) {
   );
 }
 
-// ── Bar ──────────────────────────────────────────────────
-function LangBar({ porIdioma, total }) {
+function LangBar({ porIdioma }) {
   const entries = Object.entries(LANG_META).map(([code, meta]) => ({
     code, ...meta, count: porIdioma?.[code] || 0,
   }));
@@ -71,9 +75,7 @@ function LangBar({ porIdioma, total }) {
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                 <span style={{ fontSize: "12px", color: "var(--text2)", fontWeight: 600 }}>{name}</span>
-                <span style={{ fontSize: "11px", color, fontFamily: "var(--font-mono)", fontWeight: 700 }}>
-                  {count}
-                </span>
+                <span style={{ fontSize: "11px", color, fontFamily: "var(--font-mono)", fontWeight: 700 }}>{count}</span>
               </div>
               <div style={{ height: "4px", background: "var(--border)", borderRadius: "2px", overflow: "hidden" }}>
                 <div style={{
@@ -98,7 +100,6 @@ function LangBar({ porIdioma, total }) {
   );
 }
 
-// ── Queue Item ─────────────────────────────────────────────────
 function QueueItem({ entry, position, onMarkPlayed, marking }) {
   const lang = LANG_META[entry.idioma] || LANG_META.es;
   const [confirm, setConfirm] = useState(false);
@@ -112,9 +113,7 @@ function QueueItem({ entry, position, onMarkPlayed, marking }) {
       borderLeft: `3px solid ${lang.color}`,
       borderRadius: "var(--radius-sm)",
       transition: "all 0.2s",
-      animation: "slideIn 0.3s ease",
     }}>
-      {/* Posición */}
       <div style={{
         width: "24px", height: "24px", borderRadius: "6px",
         background: `${lang.color}22`, color: lang.color,
@@ -124,11 +123,7 @@ function QueueItem({ entry, position, onMarkPlayed, marking }) {
       }}>
         {position}
       </div>
-
-      {/* Flag */}
       <span style={{ fontSize: "16px", flexShrink: 0, lineHeight: 1.5 }}>{lang.flag}</span>
-
-      {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
           <span style={{ fontSize: "13px", fontWeight: 600, color: lang.color }}>{entry.usuario}</span>
@@ -149,8 +144,6 @@ function QueueItem({ entry, position, onMarkPlayed, marking }) {
           {timeAgo(entry.createdAt)} · {formatTime(entry.createdAt)}
         </div>
       </div>
-
-      {/* Acciones */}
       {!entry.reproduccion && (
         confirm ? (
           <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
@@ -164,60 +157,53 @@ function QueueItem({ entry, position, onMarkPlayed, marking }) {
               }}>
               {marking ? "..." : "✓"}
             </button>
-            <button
-              onClick={() => setConfirm(false)}
-              style={{
-                padding: "4px 8px", background: "none",
-                border: "1px solid var(--border)", borderRadius: "6px",
-                color: "var(--text3)", cursor: "pointer", fontSize: "11px",
-              }}>✕</button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setConfirm(true)}
-            style={{
-              padding: "4px 10px", background: "none",
+            <button onClick={() => setConfirm(false)} style={{
+              padding: "4px 8px", background: "none",
               border: "1px solid var(--border)", borderRadius: "6px",
               color: "var(--text3)", cursor: "pointer", fontSize: "11px",
-              flexShrink: 0, transition: "all 0.15s",
-            }}
-            title="Marcar como reproducido"
-          >
-            ▶
-          </button>
+            }}>✕</button>
+          </div>
+        ) : (
+          <button onClick={() => setConfirm(true)} style={{
+            padding: "4px 10px", background: "none",
+            border: "1px solid var(--border)", borderRadius: "6px",
+            color: "var(--text3)", cursor: "pointer", fontSize: "11px",
+            flexShrink: 0, transition: "all 0.15s",
+          }} title="Marcar como reproducido">▶</button>
         )
       )}
     </div>
   );
 }
 
-// ── Main Panel ─────────────────────────────────────────────────
 export default function TTSPanel() {
   const [queue, setQueue] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [marking, setMarking] = useState(null);
   const [clearing, setClearing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [filter, setFilter] = useState("pending"); // pending | all
+  const [filter, setFilter] = useState("pending");
   const [lastRefresh, setLastRefresh] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const intervalRef = useRef(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const { data } = await api.get("/tts/cola?limit=100");
+      setError(null);
+      const { data } = await ttsApi.get("/cola?limit=100");
       setQueue(data.mensajes || []);
       setStats(data.stats || null);
       setLastRefresh(new Date());
     } catch (err) {
       console.error("[TTS]", err.message);
+      setError("No se pudo conectar con el bot TTS. Verifica que esté activo.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Polling cada 5s si autoRefresh activo
   useEffect(() => {
     fetchData();
     if (autoRefresh) {
@@ -229,7 +215,7 @@ export default function TTSPanel() {
   const handleMarkPlayed = async (id) => {
     setMarking(id);
     try {
-      await api.put(`/tts/${id}/play`);
+      await ttsApi.put(`/${id}/play`);
       setQueue(prev => prev.map(m => m.id === id ? { ...m, reproduccion: true } : m));
       setStats(prev => prev ? { ...prev, pending: Math.max(0, (prev.pending || 0) - 1) } : prev);
     } catch (err) {
@@ -242,7 +228,7 @@ export default function TTSPanel() {
   const handleClear = async () => {
     setClearing(true);
     try {
-      await api.delete("/tts");
+      await ttsApi.delete("/cola");
       setQueue([]);
       setStats(prev => prev ? { ...prev, pending: 0, total: 0 } : prev);
       setConfirmClear(false);
@@ -256,49 +242,52 @@ export default function TTSPanel() {
   const pendingQueue = queue.filter(m => !m.reproduccion);
   const displayQueue = filter === "pending" ? pendingQueue : queue;
   const porIdioma = stats?.porIdioma || {};
-  const usuariosUnicos = stats?.usuariosUnicos ?? new Set(pendingQueue.map(m => m.usuario)).size;
+  const usuariosUnicos = new Set(pendingQueue.map(m => m.usuario)).size;
+
+  // ── Error de conexión ──
+  if (error && !loading) {
+    return (
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center",
+        justifyContent: "center", padding: "60px 24px", textAlign: "center", gap: "16px",
+      }}>
+        <div style={{ fontSize: "48px" }}>🎙️</div>
+        <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--red)" }}>
+          Error de conexión con el bot TTS
+        </div>
+        <div style={{ fontSize: "13px", color: "var(--text3)", maxWidth: "400px", lineHeight: 1.6 }}>
+          {error}
+        </div>
+        <div style={{
+          fontSize: "12px", color: "var(--text3)", fontFamily: "var(--font-mono)",
+          background: "var(--surface)", padding: "8px 14px", borderRadius: "var(--radius-sm)",
+          border: "1px solid var(--border)",
+        }}>
+          URL: {import.meta.env.VITE_TTS_URL || import.meta.env.VITE_API_URL || "http://localhost:3000"}
+        </div>
+        <button className="save-btn" style={{ width: "auto", padding: "10px 24px" }} onClick={fetchData}>
+          Reintentar
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-      {/* ── Stats row ── */}
+      {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
-        <StatCard
-          label="En cola"
-          value={pendingQueue.length}
-          sub="mensajes pendientes"
-          color="var(--purple)"
-          icon="🎙️"
-        />
-        <StatCard
-          label="Total hoy"
-          value={stats?.total ?? queue.length}
-          sub="mensajes procesados"
-          color="var(--cyan)"
-          icon="📊"
-        />
-        <StatCard
-          label="Usuarios únicos"
-          value={usuariosUnicos}
-          sub="en cola actual"
-          color="#F4A261"
-          icon="👥"
-        />
-        <StatCard
-          label="Reproducidos"
-          value={stats?.played ?? queue.filter(m => m.reproduccion).length}
-          sub="completados"
-          color="var(--green)"
-          icon="✅"
-        />
+        <StatCard label="En cola"       value={pendingQueue.length}                              sub="mensajes pendientes"  color="var(--purple)" icon="🎙️" />
+        <StatCard label="Total"         value={stats?.total ?? queue.length}                     sub="mensajes procesados"  color="var(--cyan)"   icon="📊" />
+        <StatCard label="Usuarios"      value={usuariosUnicos}                                   sub="en cola actual"       color="#F4A261"       icon="👥" />
+        <StatCard label="Reproducidos"  value={stats?.played ?? queue.filter(m => m.reproduccion).length} sub="completados" color="var(--green)"  icon="✅" />
       </div>
 
-      {/* ── Main grid ── */}
+      {/* Grid principal */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: "20px", alignItems: "start" }}>
 
-        {/* ── Cola principal ── */}
+        {/* Cola */}
         <div className="card">
-          {/* Header */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
             <div className="card-title" style={{ marginBottom: 0 }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -314,9 +303,7 @@ export default function TTSPanel() {
                 </span>
               )}
             </div>
-
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              {/* Auto-refresh toggle */}
               <button
                 onClick={() => setAutoRefresh(p => !p)}
                 style={{
@@ -327,11 +314,9 @@ export default function TTSPanel() {
                   color: autoRefresh ? "var(--purple)" : "var(--text3)",
                   cursor: "pointer", fontSize: "11px", fontWeight: 600,
                 }}
-                title={autoRefresh ? "Pausar auto-refresh" : "Activar auto-refresh"}
               >
                 {autoRefresh ? "⏸ Auto" : "▶ Auto"}
               </button>
-
               <button className="refresh-btn" onClick={fetchData}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M23 4v6h-6M1 20v-6h6"/>
@@ -339,63 +324,39 @@ export default function TTSPanel() {
                 </svg>
                 Actualizar
               </button>
-
-              {/* Limpiar cola */}
               {confirmClear ? (
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <button
-                    onClick={handleClear}
-                    disabled={clearing}
-                    style={{
-                      padding: "5px 10px", background: "rgba(255,71,87,0.15)",
-                      border: "1px solid rgba(255,71,87,0.3)", borderRadius: "6px",
-                      color: "var(--red)", cursor: "pointer", fontSize: "11px", fontWeight: 600,
-                    }}>
-                    {clearing ? "..." : "🗑 Sí, limpiar"}
-                  </button>
-                  <button
-                    onClick={() => setConfirmClear(false)}
-                    style={{
-                      padding: "5px 10px", background: "var(--surface)",
-                      border: "1px solid var(--border)", borderRadius: "6px",
-                      color: "var(--text2)", cursor: "pointer", fontSize: "11px",
-                    }}>
-                    Cancelar
-                  </button>
+                  <button onClick={handleClear} disabled={clearing} style={{
+                    padding: "5px 10px", background: "rgba(255,71,87,0.15)",
+                    border: "1px solid rgba(255,71,87,0.3)", borderRadius: "6px",
+                    color: "var(--red)", cursor: "pointer", fontSize: "11px", fontWeight: 600,
+                  }}>{clearing ? "..." : "🗑 Sí, limpiar"}</button>
+                  <button onClick={() => setConfirmClear(false)} style={{
+                    padding: "5px 10px", background: "var(--surface)",
+                    border: "1px solid var(--border)", borderRadius: "6px",
+                    color: "var(--text2)", cursor: "pointer", fontSize: "11px",
+                  }}>Cancelar</button>
                 </div>
               ) : (
-                <button
-                  onClick={() => setConfirmClear(true)}
-                  disabled={pendingQueue.length === 0}
-                  style={{
-                    padding: "5px 12px", background: "none",
-                    border: "1px solid rgba(255,71,87,0.3)", borderRadius: "6px",
-                    color: "var(--red)", cursor: "pointer", fontSize: "11px",
-                    opacity: pendingQueue.length === 0 ? 0.4 : 1,
-                  }}>
-                  🗑 Limpiar
-                </button>
+                <button onClick={() => setConfirmClear(true)} disabled={pendingQueue.length === 0} style={{
+                  padding: "5px 12px", background: "none",
+                  border: "1px solid rgba(255,71,87,0.3)", borderRadius: "6px",
+                  color: "var(--red)", cursor: "pointer", fontSize: "11px",
+                  opacity: pendingQueue.length === 0 ? 0.4 : 1,
+                }}>🗑 Limpiar</button>
               )}
             </div>
           </div>
 
-          {/* Filter tabs */}
           <div className="tabs" style={{ marginBottom: "14px" }}>
-            <button
-              className={`tab ${filter === "pending" ? "active" : ""}`}
-              onClick={() => setFilter("pending")}
-            >
+            <button className={`tab ${filter === "pending" ? "active" : ""}`} onClick={() => setFilter("pending")}>
               Pendientes ({pendingQueue.length})
             </button>
-            <button
-              className={`tab ${filter === "all" ? "active" : ""}`}
-              onClick={() => setFilter("all")}
-            >
+            <button className={`tab ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
               Todos ({queue.length})
             </button>
           </div>
 
-          {/* Queue list */}
           {loading ? (
             <div className="spinner" />
           ) : displayQueue.length === 0 ? (
@@ -424,13 +385,10 @@ export default function TTSPanel() {
           )}
         </div>
 
-        {/* ── Panel lateral ── */}
+        {/* Panel lateral */}
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <LangBar porIdioma={porIdioma} />
 
-          {/* Stats por idioma */}
-          <LangBar porIdioma={porIdioma} total={pendingQueue.length} />
-
-          {/* Comandos */}
           <div className="card">
             <div className="card-title">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -446,28 +404,16 @@ export default function TTSPanel() {
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <span style={{ fontSize: "15px" }}>{meta.flag}</span>
-                    <code style={{
-                      fontSize: "12px", color: meta.color,
-                      fontFamily: "var(--font-mono)", fontWeight: 600,
-                    }}>{meta.cmd}</code>
+                    <code style={{ fontSize: "12px", color: meta.color, fontFamily: "var(--font-mono)", fontWeight: 600 }}>
+                      {meta.cmd}
+                    </code>
                   </div>
                   <span style={{ fontSize: "11px", color: "var(--text3)" }}>{meta.name}</span>
                 </div>
               ))}
-              <div style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "8px 0",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "15px" }}>🥴</span>
-                  <code style={{ fontSize: "12px", color: "var(--text2)", fontFamily: "var(--font-mono)", fontWeight: 600 }}>!paja</code>
-                </div>
-                <span style={{ fontSize: "11px", color: "var(--text3)" }}>El clásico</span>
-              </div>
             </div>
           </div>
 
-          {/* Info de conexión */}
           <div style={{
             padding: "12px 14px",
             background: "rgba(145,70,255,0.04)",
@@ -475,9 +421,12 @@ export default function TTSPanel() {
             borderRadius: "var(--radius-sm)",
             fontSize: "12px", color: "var(--text3)", lineHeight: 1.6,
           }}>
-            <div style={{ fontWeight: 600, color: "var(--purple)", marginBottom: "4px" }}>ℹ️ Sobre este panel</div>
-            Los mensajes se guardan en MongoDB. El bot TTS (bot.js) los consume y los envía al overlay de OBS.
-            Este panel se actualiza automáticamente cada <strong style={{ color: "var(--text2)" }}>5 segundos</strong>.
+            <div style={{ fontWeight: 600, color: "var(--purple)", marginBottom: "4px" }}>ℹ️ Conexión</div>
+            Conectado a: <span style={{ color: "var(--cyan)", fontFamily: "var(--font-mono)", fontSize: "11px" }}>
+              {import.meta.env.VITE_TTS_URL || import.meta.env.VITE_API_URL || "http://localhost:3000"}
+            </span>
+            <br/>
+            Se actualiza cada <strong style={{ color: "var(--text2)" }}>5 segundos</strong>.
           </div>
         </div>
       </div>
