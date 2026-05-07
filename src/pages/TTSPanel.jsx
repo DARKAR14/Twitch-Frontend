@@ -94,11 +94,30 @@ export default function TTSPanel() {
 
   // ── Acciones de Render ──
   const ejecutarAccionRender = async (accion) => {
+    // 1. Manejo especial para INICIAR (Despierta el bot si está en 503)
+    if (accion === 'resume') {
+      alert("Enviando señal de encendido... Render tardará unos 30-50 segundos en despertar el bot.");
+      
+      // Hacemos un GET a la URL principal. 
+      // Esto despierta a Render sin necesidad de que el backend responda (evita el 503/400).
+      fetch(BOT_API_URL, { mode: 'no-cors' }).catch(() => {});
+      return;
+    }
+
+    // 2. Lógica para REINICIAR o PARAR (Requiere que el bot esté Online)
     if (!window.confirm(`¿Seguro que quieres ejecutar ${accion.toUpperCase()}?`)) return;
+
     try {
-      const res = await fetch(`${BOT_API_URL}/admin/servicio/${accion}`, { method: 'POST' });
-      if (res.ok) alert(`Orden de ${accion} enviada a Render.`);
-      else alert("Error al enviar comando.");
+      const res = await fetch(`${BOT_API_URL}/admin/servicio/${accion}`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (res.ok) {
+        alert(`Orden de ${accion} enviada a Render.`);
+      } else {
+        alert(`Error ${res.status}: No se pudo ejecutar. ¿El bot está Online?`);
+      }
     } catch (err) {
       alert("Error de conexión con el bot.");
     }
