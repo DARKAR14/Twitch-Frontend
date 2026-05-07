@@ -20,10 +20,11 @@ export default function TTSPanel() {
   // ── Cargar datos iniciales ─────────────────────────────────────
   const fetchData = useCallback(async () => {
     try {
-      // Obtener datos de TTS desde MongoDB (backend principal)
-      const ttsRes = await api.get("/tts/cola");
+      // Obtener datos de TTS desde el backend principal
+      const ttsRes = await fetch(`${BOT_API_URL}/cola`);
+      const ttsData = await ttsRes.json();
       setCola(ttsRes.data.mensajes || []);
-      setStats(ttsRes.data.stats);
+      setStats(ttsData.total || null);
 
       // Intentar obtener stats del bot (render independiente)
       try {
