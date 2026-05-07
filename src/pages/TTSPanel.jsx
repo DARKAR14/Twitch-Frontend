@@ -1,10 +1,10 @@
+// src/pages/TTSPanel.jsx
 import { useState, useEffect, useRef, useCallback } from "react";
 
 const BOT_WS_URL = import.meta.env.VITE_BOT_WS_URL || "ws://localhost:3000";
 const BOT_API_URL = import.meta.env.VITE_BOT_API_URL || "http://localhost:3000";
 
 const FLAGS = { es: "🇪🇸", en: "🇺🇸", ja: "🇯🇵", ru: "🇷🇺", pt: "🇧🇷" };
-const LANG_NAMES = { es: "Español", en: "Inglés", ja: "Japonés", ru: "Ruso", pt: "Portugués" };
 const COMANDOS = [
   { cmd: "!habla",    lang: "Español",  flag: "🇪🇸" },
   { cmd: "!speak",    lang: "Inglés",   flag: "🇺🇸" },
@@ -24,38 +24,25 @@ export default function TTSPanel() {
   const [confirmandoLimpiar, setConfirmandoLimpiar] = useState(false);
   const wsRef = useRef(null);
 
-  // ── Carga de datos con Blindaje Total ──
+  // ── Carga de datos blindada ──
   const fetchData = useCallback(async () => {
     try {
       const ttsRes = await fetch(`${BOT_API_URL}/cola`);
-      if (!ttsRes.ok) throw new Error("Respuesta no exitosa");
+      if (!ttsRes.ok) throw new Error();
       
       const resJson = await ttsRes.json();
       
-      // Intentamos extraer la lista de mensajes de cualquier estructura posible
-      let mensajesFinales = [];
-      if (resJson) {
-        if (Array.isArray(resJson)) {
-          mensajesFinales = resJson;
-        } else if (resJson.data && Array.isArray(resJson.data.mensajes)) {
-          mensajesFinales = resJson.data.mensajes;
-        } else if (Array.isArray(resJson.mensajes)) {
-          mensajesFinales = resJson.mensajes;
-        }
-      }
+      // Validación de mensajes (Evita el error .map)
+      const mensajesExtraidos = resJson.data?.mensajes || resJson.mensajes || [];
+      setCola(Array.isArray(mensajesExtraidos) ? mensajesExtraidos : []);
+      setStats(resJson.data?.total || resJson.stats || resJson.total || null);
 
-      setCola(mensajesFinales);
-      setStats(resJson?.data?.total || resJson?.stats || resJson?.total || null);
-
-      // Stats del bot (independiente)
-      try {
-        const botRes = await fetch(`${BOT_API_URL}/stats`);
-        if (botRes.ok) setBotStats(await botRes.json());
-      } catch { setBotStats(null); }
-
+      // Stats independientes del bot
+      const botRes = await fetch(`${BOT_API_URL}/stats`);
+      if (botRes.ok) setBotStats(await botRes.json());
     } catch (err) {
-      console.error("Error en fetchData:", err.message);
-      setCola([]); // Ante error, garantizamos array vacío
+      console.error("Fallo en carga:", err);
+      setCola([]);
     } finally {
       setLoading(false);
     }
@@ -65,39 +52,33 @@ export default function TTSPanel() {
 
   // ── WebSocket ──
   useEffect(() => {
-    let timeout;
+    let t;
     const conectar = () => {
-      try {
-        const ws = new WebSocket(BOT_WS_URL);
-        wsRef.current = ws;
-        ws.onopen = () => setWsStatus("connected");
-        ws.onmessage = (e) => {
-          try {
-            const d = JSON.parse(e.data);
-            if (d.tipo === "nuevo") { setCurrent(d); fetchData(); }
-          } catch {}
-        };
-        ws.onclose = () => {
-          setWsStatus("disconnected");
-          timeout = setTimeout(conectar, 3000);
-        };
-        ws.onerror = () => wsRef.current?.close();
-      } catch {
-        timeout = setTimeout(conectar, 5000);
-      }
+      const ws = new WebSocket(BOT_WS_URL);
+      wsRef.current = ws;
+      ws.onopen = () => setWsStatus("connected");
+      ws.onmessage = (e) => {
+        try {
+          const d = JSON.parse(e.data);
+          if (d.tipo === "nuevo") { setCurrent(d); fetchData(); }
+        } catch {}
+      };
+      ws.onclose = () => {
+        setWsStatus("disconnected");
+        t = setTimeout(conectar, 3000);
+      };
     };
     conectar();
-    return () => { wsRef.current?.close(); clearTimeout(timeout); };
+    return () => { wsRef.current?.close(); clearTimeout(t); };
   }, [fetchData]);
 
-  // ── Acción Limpiar (Doble clic) ──
-  async function manejarLimpiar() {
+  // ── Acciones de Cola (Doble clic) ──
+  const manejarLimpiar = async () => {
     if (!confirmandoLimpiar) {
       setConfirmandoLimpiar(true);
       setTimeout(() => setConfirmandoLimpiar(false), 3000);
       return;
     }
-
     try {
       const res = await fetch(`${BOT_API_URL}/cola`, { method: "DELETE" });
       if (res.ok) {
@@ -106,37 +87,44 @@ export default function TTSPanel() {
         setConfirmandoLimpiar(false);
         fetchData();
       }
-    } catch (err) {
-      console.error("Error al limpiar:", err);
+    } catch (e) {
       setConfirmandoLimpiar(false);
     }
-  }
+  };
 
+  // ── Acciones de Render ──
+  const ejecutarAccionRender = async (accion) => {
+    if (!window.confirm(`¿Seguro que quieres ejecutar ${accion.toUpperCase()}?`)) return;
+    try {
+      const res = await fetch(`${BOT_API_URL}/admin/servicio/${accion}`, { method: 'POST' });
+      if (res.ok) alert(`Orden de ${accion} enviada a Render.`);
+      else alert("Error al enviar comando.");
+    } catch (err) {
+      alert("Error de conexión con el bot.");
+    }
+  };
+
+  const colaSegura = Array.isArray(cola) ? cola : [];
   const porIdioma = stats?.porIdioma || {};
   const wsClientes = botStats?.websocket?.total || 0;
-
-  // Forzar que cola siempre sea iterable para el render
-  const colaSegura = Array.isArray(cola) ? cola : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       
-      {/* Stats Cards */}
+      {/* Indicadores Superiores */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
         <StatCard label="En cola" value={colaSegura.length} sub="mensajes pendientes" color="var(--purple)" />
         <StatCard label="OBS" value={wsClientes > 0 ? "ON" : "OFF"} sub={`${wsClientes} activos`} color={wsClientes > 0 ? "var(--green)" : "var(--red)"} />
-        <StatCard label="WebSocket" value={wsStatus === "connected" ? "Online" : "Offline"} sub="Bot Status" color={wsStatus === "connected" ? "var(--green)" : "var(--red)"} />
-        <StatCard label="Usuarios" value={stats?.usuariosUnicos ?? "—"} sub="únicos" color="var(--text1)" />
+        <StatCard label="Bot Status" value={wsStatus === "connected" ? "Online" : "Offline"} sub="WebSocket" color={wsStatus === "connected" ? "var(--green)" : "var(--red)"} />
+        <StatCard label="Usuarios" value={stats?.usuariosUnicos ?? "—"} sub="únicos hoy" color="var(--text1)" />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "20px", alignItems: "start" }}>
         
-        {/* Lado Izquierdo: Cola */}
+        {/* Panel Izquierdo: La Cola */}
         <div className="card">
           <div className="card-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <PulseDot active={wsStatus === "connected"} /> COLA TTS
-            </span>
+            <span><PulseDot active={wsStatus === "connected"} /> COLA TTS</span>
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={fetchData} style={btnStyle("var(--border)", "var(--text2)")}>↻</button>
               <button 
@@ -162,39 +150,49 @@ export default function TTSPanel() {
             <div style={{ padding: "40px", textAlign: "center", color: "var(--text3)" }}>📭 Cola vacía</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              {colaSegura.map((entry, i) => (
-                <QueueItem key={entry.id || i} entry={entry} position={i + 1} />
+              {colaSegura.map((e, i) => (
+                <QueueItem key={e.id || i} entry={e} position={i + 1} />
               ))}
             </div>
           )}
         </div>
 
-        {/* Lado Derecho: Info y Comandos */}
+        {/* Panel Derecho: Info, Comandos y Render */}
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          
           <div className="card">
-            <div className="card-title">IDIOMAS EN COLA</div>
-            {Object.keys(FLAGS).map((lang) => (
-              <LanguageRow key={lang} lang={lang} count={porIdioma[lang] || 0} max={Math.max(...Object.values(porIdioma), 1)} />
+            <div className="card-title">IDIOMAS</div>
+            {Object.keys(FLAGS).map(l => (
+              <LanguageRow key={l} lang={l} count={porIdioma[l] || 0} max={Math.max(...Object.values(porIdioma), 1)} />
             ))}
           </div>
 
           <div className="card">
             <div className="card-title">COMANDOS</div>
-            {COMANDOS.map((c) => (
+            {COMANDOS.map(c => (
               <div key={c.cmd} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
-                <span style={{ fontSize: "13px", color: "var(--text1)" }}><strong>{c.flag} {c.cmd}</strong></span>
+                <span style={{ fontSize: "13px" }}>{c.flag} <strong>{c.cmd}</strong></span>
                 <span style={{ fontSize: "11px", color: "var(--text3)" }}>{c.lang}</span>
               </div>
             ))}
           </div>
+
+          <div className="card">
+            <div className="card-title">INSTANCIA RENDER</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "12px" }}>
+              <button onClick={() => ejecutarAccionRender('resume')} style={btnStyle("rgba(46,213,115,0.15)", "var(--green)")}>▶ Iniciar</button>
+              <button onClick={() => ejecutarAccionRender('restart')} style={btnStyle("rgba(145,71,255,0.15)", "var(--purple)")}>↻ Reiniciar</button>
+              <button onClick={() => ejecutarAccionRender('suspend')} style={btnStyle("rgba(255,71,87,0.15)", "var(--red)")} title="Solo plan Pro">🛑 Parar</button>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
   );
 }
 
-// ── Componentes de Soporte ──
-
+// ── Componentes de UI ──
 function StatCard({ label, value, sub, color }) {
   return (
     <div className="card" style={{ padding: "16px" }}>
@@ -233,5 +231,5 @@ function PulseDot({ active }) {
 }
 
 function btnStyle(bg, color) {
-  return { background: bg, color, border: "none", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 600 };
+  return { background: bg, color, border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 700 };
 }
