@@ -1,3 +1,4 @@
+// src/pages/TTSPanel.jsx
 import { useState, useEffect, useRef, useCallback } from "react";
 
 const BOT_WS_URL = import.meta.env.VITE_BOT_WS_URL || "ws://localhost:3000";
@@ -24,19 +25,26 @@ export default function TTSPanel() {
   const wsRef = useRef(null);
 
   // ── Estado para el Modal Personalizado ──
-  const [modalConfig, setModalConfig] = useState({ show: false, accion: null, titulo: "", mensaje: "" });
+  const [modalConfig, setModalConfig] = useState({ show: false, accion: null, titulo: "", mensaje: "", cargando: false });
 
+  // ── Carga de datos blindada ──
   const fetchData = useCallback(async () => {
     try {
       const ttsRes = await fetch(`${BOT_API_URL}/cola`);
       if (!ttsRes.ok) throw new Error();
+      
       const resJson = await ttsRes.json();
+      
+      // Validación de mensajes (Evita el error .map)
       const mensajesExtraidos = resJson.data?.mensajes || resJson.mensajes || [];
       setCola(Array.isArray(mensajesExtraidos) ? mensajesExtraidos : []);
       setStats(resJson.data?.total || resJson.stats || resJson.total || null);
+
+      // Stats independientes del bot
       const botRes = await fetch(`${BOT_API_URL}/stats`);
       if (botRes.ok) setBotStats(await botRes.json());
     } catch (err) {
+      console.error("Fallo en carga:", err);
       setCola([]);
     } finally {
       setLoading(false);
@@ -45,6 +53,7 @@ export default function TTSPanel() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // ── WebSocket ──
   useEffect(() => {
     let t;
     const conectar = () => {
@@ -66,6 +75,7 @@ export default function TTSPanel() {
     return () => { wsRef.current?.close(); clearTimeout(t); };
   }, [fetchData]);
 
+  // ── Acciones de Cola (Doble clic) ──
   const manejarLimpiar = async () => {
     if (!confirmandoLimpiar) {
       setConfirmandoLimpiar(true);
@@ -92,30 +102,35 @@ export default function TTSPanel() {
         show: true,
         accion: 'restart',
         titulo: "¿Deseas reiniciar el bot?",
-        mensaje: "El proceso tardará aproximadamente entre 40 y 60 segundos en volver a estar online."
+        mensaje: "El proceso tardará aproximadamente entre 40 y 60 segundos en volver a estar online.",
+        cargando: false
       });
     } else {
       setModalConfig({
         show: true,
         accion: 'suspend',
         titulo: "¿Suspender el servicio?",
-        mensaje: "Solo el propietario puede iniciarlo de nuevo desde el Dashboard de Render."
+        mensaje: "Solo el propietario puede iniciarlo de nuevo desde el Dashboard de Render.",
+        cargando: false
       });
     }
   };
 
   const confirmarAccionRender = async () => {
     const { accion } = modalConfig;
-    setModalConfig({ ...modalConfig, show: false });
+    setModalConfig({ ...modalConfig, cargando: true });
     
     try {
       const res = await fetch(`${BOT_API_URL}/admin/servicio/${accion}`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
-      if (!res.ok) alert("Error al procesar la solicitud.");
+      
+      // En lugar de alert(), cerramos el modal con éxito
+      setModalConfig({ ...modalConfig, show: false, cargando: false });
     } catch (err) {
-      alert("Error de conexión.");
+      setModalConfig({ ...modalConfig, titulo: "Error", mensaje: "No se pudo conectar con el bot.", cargando: false });
+      setTimeout(() => setModalConfig({ ...modalConfig, show: false }), 2000);
     }
   };
 
@@ -132,15 +147,22 @@ export default function TTSPanel() {
           <div className="card" style={modalStyle}>
             <h3 style={{ marginTop: 0, color: "var(--purple)" }}>{modalConfig.titulo}</h3>
             <p style={{ color: "var(--text2)", fontSize: "14px", lineHeight: "1.5" }}>{modalConfig.mensaje}</p>
+            
             <div style={{ display: "flex", gap: "10px", marginTop: "20px", justifyContent: "flex-end" }}>
-              <button onClick={() => setModalConfig({ ...modalConfig, show: false })} style={btnStyle("var(--bg2)", "var(--text3)")}>Cancelar</button>
-              <button onClick={confirmarAccionRender} style={btnStyle("var(--purple)", "#fff")}>Confirmar</button>
+              {!modalConfig.cargando ? (
+                <>
+                  <button onClick={() => setModalConfig({ ...modalConfig, show: false })} style={btnStyle("var(--bg2)", "var(--text3)")}>Cancelar</button>
+                  <button onClick={confirmarAccionRender} style={btnStyle("var(--purple)", "#fff")}>Confirmar</button>
+                </>
+              ) : (
+                <span style={{ color: "var(--purple)", fontSize: "12px", fontWeight: "bold" }}>Procesando...</span>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Indicadores */}
+      {/* Indicadores Superiores */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
         <StatCard label="En cola" value={colaSegura.length} sub="mensajes pendientes" color="var(--purple)" />
         <StatCard label="OBS" value={wsClientes > 0 ? "ON" : "OFF"} sub={`${wsClientes} activos`} color={wsClientes > 0 ? "var(--green)" : "var(--red)"} />
@@ -149,7 +171,9 @@ export default function TTSPanel() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "20px", alignItems: "start" }}>
-        <div className="card">
+        
+        {/* Panel Izquierdo: La Cola (MÁS AMPLIA) */}
+        <div className="card" style={{ minHeight: "550px" }}>
           <div className="card-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span><PulseDot active={wsStatus === "connected"} /> COLA TTS</span>
             <div style={{ display: "flex", gap: "8px" }}>
@@ -163,24 +187,37 @@ export default function TTSPanel() {
               </button>
             </div>
           </div>
+
           {current && (
             <div style={{ background: "rgba(145,71,255,0.08)", border: "1px solid rgba(145,71,255,0.2)", borderRadius: "8px", padding: "12px", marginBottom: "15px" }}>
               <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: 800 }}>REPRODUCIENDO</div>
               <div style={{ fontSize: "13px" }}>{FLAGS[current.idioma]} <strong>{current.usuario}</strong>: {current.mensaje}</div>
             </div>
           )}
-          {loading ? <div style={{ padding: "40px", textAlign: "center" }}>Cargando...</div> : colaSegura.length === 0 ? <div style={{ padding: "40px", textAlign: "center", color: "var(--text3)" }}>📭 Cola vacía</div> : (
+
+          {loading ? (
+            <div style={{ padding: "40px", textAlign: "center" }}>Cargando...</div>
+          ) : colaSegura.length === 0 ? (
+            <div style={{ padding: "40px", textAlign: "center", color: "var(--text3)" }}>📭 Cola vacía</div>
+          ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              {colaSegura.map((e, i) => <QueueItem key={e.id || i} entry={e} position={i + 1} />)}
+              {colaSegura.map((e, i) => (
+                <QueueItem key={e.id || i} entry={e} position={i + 1} />
+              ))}
             </div>
           )}
         </div>
 
+        {/* Panel Derecho */}
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          
           <div className="card">
             <div className="card-title">IDIOMAS</div>
-            {Object.keys(FLAGS).map(l => <LanguageRow key={l} lang={l} count={porIdioma[l] || 0} max={Math.max(...Object.values(porIdioma), 1)} />)}
+            {Object.keys(FLAGS).map(l => (
+              <LanguageRow key={l} lang={l} count={porIdioma[l] || 0} max={Math.max(...Object.values(porIdioma), 1)} />
+            ))}
           </div>
+
           <div className="card">
             <div className="card-title">COMANDOS</div>
             {COMANDOS.map(c => (
@@ -190,13 +227,18 @@ export default function TTSPanel() {
               </div>
             ))}
           </div>
+
           <div className="card">
             <div className="card-title">GESTIÓN DE SERVICIO</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "12px" }}>
               <button onClick={() => abrirModal('restart')} style={btnStyle("rgba(145,71,255,0.15)", "var(--purple)")}>↻ Reiniciar</button>
               <button onClick={() => abrirModal('suspend')} style={btnStyle("rgba(255,71,87,0.15)", "var(--red)")}>🛑 Parar Bot</button>
             </div>
+            <p style={{ fontSize: '10px', color: 'var(--text3)', marginTop: '10px', textAlign: 'center' }}>
+              * Al parar el bot, deberá iniciarse manualmente desde Render.
+            </p>
           </div>
+
         </div>
       </div>
     </div>
@@ -206,16 +248,16 @@ export default function TTSPanel() {
 // ── Estilos para el Modal ──
 const overlayStyle = {
   position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
-  backgroundColor: "rgba(0,0,0,0.7)", display: "flex", justifyContent: "center",
-  alignItems: "center", zIndex: 1000, backdropFilter: "blur(4px)"
+  backgroundColor: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center",
+  alignItems: "center", zIndex: 1000, backdropFilter: "blur(6px)"
 };
 
 const modalStyle = {
-  width: "400px", padding: "24px", border: "1px solid var(--border)",
-  boxShadow: "0 20px 40px rgba(0,0,0,0.4)", animation: "modalIn 0.3s ease"
+  width: "420px", padding: "24px", border: "1px solid var(--border)",
+  boxShadow: "0 20px 50px rgba(0,0,0,0.5)", animation: "modalIn 0.3s ease"
 };
 
-// ── Otros Componentes de UI ──
+// ── Componentes de UI ──
 function StatCard({ label, value, sub, color }) {
   return (
     <div className="card" style={{ padding: "16px" }}>
