@@ -1,6 +1,5 @@
 // src/pages/TTSPanel.jsx
 import { useState, useEffect, useRef, useCallback } from "react";
-import { api } from "../lib/api";
 
 const BOT_WS_URL = import.meta.env.VITE_BOT_WS_URL || "ws://localhost:3000";
 const BOT_API_URL = import.meta.env.VITE_BOT_API_URL || "http://localhost:3000";
@@ -20,13 +19,15 @@ export default function TTSPanel() {
   // ── Cargar datos iniciales ─────────────────────────────────────
   const fetchData = useCallback(async () => {
     try {
-      // Obtener datos de TTS desde el backend principal
+      // Obtener cola del bot
       const ttsRes = await fetch(`${BOT_API_URL}/cola`);
-      const ttsData = await ttsRes.json();
-      setCola(ttsRes.data.mensajes || []);
-      setStats(ttsData.total || null);
+      if (ttsRes.ok) {
+        const ttsData = await ttsRes.json();
+        setCola(ttsData.mensajes || []);
+        setStats(ttsData.stats || null);
+      }
 
-      // Intentar obtener stats del bot (render independiente)
+      // Obtener stats del bot
       try {
         const botRes = await fetch(`${BOT_API_URL}/stats`);
         if (botRes.ok) {
@@ -34,7 +35,6 @@ export default function TTSPanel() {
           setBotStats(botData);
         }
       } catch {
-        // Bot puede estar dormido en Render (plan gratuito)
         setBotStats(null);
       }
     } catch (err) {
@@ -92,21 +92,12 @@ export default function TTSPanel() {
   // ── Acciones ───────────────────────────────────────────────────
   async function limpiarCola() {
     try {
-      await api.delete("/tts");
+      await fetch(`${BOT_API_URL}/cola`, { method: "DELETE" });
       setCola([]);
       setCurrent(null);
       fetchData();
     } catch (err) {
       console.error("Error limpiando cola", err.message);
-    }
-  }
-
-  async function marcarComoReproducido(id) {
-    try {
-      await api.put(`/tts/${id}/play`);
-      fetchData();
-    } catch (err) {
-      console.error("Error marcando como reproducido", err.message);
     }
   }
 
