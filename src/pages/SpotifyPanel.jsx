@@ -1,9 +1,26 @@
 // src/pages/SpotifyPanel.jsx
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { api, getSocket } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}
 
 function TrackCard({ track, isPlaying = false, requestedBy = null, small = false }) {
   if (!track) return null;
@@ -49,7 +66,7 @@ function TrackCard({ track, isPlaying = false, requestedBy = null, small = false
   );
 }
 
-function ConnectSection({ onConnected }) {
+function ConnectSection() {
   const handleConnect = () => {
     window.location.href = `${API_URL}/spotify/auth`;
   };
@@ -106,9 +123,10 @@ export default function SpotifyPanel() {
   const [tab, setTab] = useState("queue"); // queue | requests
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [overlayCopyState, setOverlayCopyState] = useState("idle");
   const pollRef = useRef(null);
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
       const { data } = await api.get("/spotify/status");
       setStatus(data);
@@ -117,36 +135,42 @@ export default function SpotifyPanel() {
         setQueue(data.queue || []);
       }
     } catch { setStatus({ connected: false }); }
-  };
+  }, []);
 
-  const fetchQueue = async () => {
+  const fetchQueue = useCallback(async () => {
     if (!status?.connected) return;
     setLoadingQueue(true);
     try {
       const { data } = await api.get("/spotify/queue");
       setCurrent(data.current);
       setQueue(data.queue || []);
-    } catch {}
+    } catch (error) {
+      console.error("Error al cargar la cola de Spotify", error);
+    }
     finally { setLoadingQueue(false); }
-  };
+  }, [status?.connected]);
 
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async () => {
     try {
       const { data } = await api.get("/spotify/requests");
       setRequests(data.requests || []);
-    } catch {}
-  };
+    } catch (error) {
+      console.error("Error al cargar solicitudes de Spotify", error);
+    }
+  }, []);
 
-  const fetchReward = async () => {
+  const fetchReward = useCallback(async () => {
     try {
       const { data } = await api.get("/spotify/reward-info");
       setReward(data.reward);
-    } catch {}
-  };
+    } catch (error) {
+      console.error("Error al cargar la recompensa de Spotify", error);
+    }
+  }, []);
 
   useEffect(() => {
     fetchStatus();
-  }, []);
+  }, [fetchStatus]);
 
   useEffect(() => {
     if (!status?.connected) return;
@@ -155,7 +179,7 @@ export default function SpotifyPanel() {
     // Poll de la cola cada 10s
     pollRef.current = setInterval(fetchQueue, 10000);
     return () => clearInterval(pollRef.current);
-  }, [status?.connected]);
+  }, [status?.connected, fetchQueue, fetchRequests, fetchReward]);
 
   // Redirigido desde callback de Spotify
   useEffect(() => {
@@ -164,7 +188,7 @@ export default function SpotifyPanel() {
       fetchStatus();
       window.history.replaceState({}, "", window.location.pathname);
     }
-  }, []);
+  }, [fetchStatus]);
 
   // Socket: nueva canción añadida
   useEffect(() => {
@@ -180,7 +204,7 @@ export default function SpotifyPanel() {
       socket.off("spotify:track_added", handler);
       socket.off("spotify:disconnected");
     };
-  }, []);
+  }, [fetchQueue]);
 
   const handleDisconnect = async () => {
     if (!confirm("¿Desconectar Spotify? Se desactivará la recompensa de Channel Points.")) return;
@@ -188,8 +212,22 @@ export default function SpotifyPanel() {
     try {
       await api.post("/spotify/disconnect");
       setStatus({ connected: false });
-    } catch {}
+    } catch (error) {
+      console.error("Error al desconectar Spotify", error);
+    }
     finally { setDisconnecting(false); }
+  };
+
+  const handleCopyOverlay = async () => {
+    const overlayUrl = `${window.location.origin}/spotify-overley`;
+    try {
+      await copyText(overlayUrl);
+      setOverlayCopyState("copied");
+      setTimeout(() => setOverlayCopyState("idle"), 1800);
+    } catch {
+      setOverlayCopyState("error");
+      setTimeout(() => setOverlayCopyState("idle"), 2200);
+    }
   };
 
   // Cargando
@@ -198,7 +236,7 @@ export default function SpotifyPanel() {
   // No conectado
   if (!status.connected) {
     return isAdmin
-      ? <ConnectSection onConnected={fetchStatus} />
+      ? <ConnectSection />
       : (
         <div className="empty-state">
           <div style={{ fontSize: "32px", marginBottom: "12px" }}>🎵</div>
@@ -229,6 +267,29 @@ export default function SpotifyPanel() {
           )}
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <button
+            className="refresh-btn"
+            onClick={handleCopyOverlay}
+            title={overlayCopyState === "copied" ? "Overlay copiado" : "Copiar URL del overlay para OBS"}
+            style={{
+              marginLeft: 0,
+              borderColor: overlayCopyState === "error" ? "rgba(255,71,87,0.4)" : "rgba(255,122,0,0.35)",
+              color: overlayCopyState === "error" ? "var(--red)" : "#ff8a00",
+              background: overlayCopyState === "copied" ? "rgba(29,185,84,0.12)" : "rgba(255,122,0,0.09)",
+            }}
+          >
+            {overlayCopyState === "copied" ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            )}
+            Copiar overley
+          </button>
           <button className="refresh-btn" onClick={fetchQueue} disabled={loadingQueue}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M23 4v6h-6M1 20v-6h6"/>

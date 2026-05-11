@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import SpotifyOverlay from "./pages/SpotifyOverlay";
 import { PermissionsProvider } from "./context/PermissionsContext";
 
 function ProtectedRoute({ children }) {
@@ -16,6 +17,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={loading ? null : user ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/spotify-overlay" element={<SpotifyOverlay />} />
+      <Route path="/spotify-overley" element={<SpotifyOverlay />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
