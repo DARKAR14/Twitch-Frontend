@@ -176,32 +176,63 @@
 .spotify-vinyl {
   position: absolute;
   top: 4.9%;
-  right: 0;
+  right: -5%;
   z-index: 1;
   width: 63.2%;
   aspect-ratio: 1;
   border-radius: 50%;
+  overflow: hidden;
+
   background:
-    radial-gradient(circle at center, #ff7600 0 11%, #ffb420 12% 16.8%, #080808 17.6% 21%, transparent 21.8%),
-    repeating-radial-gradient(circle at center, #1f1f1f 0 0.11cqw, #050505 0.11cqw 0.29cqw, #282828 0.29cqw 0.34cqw),
-    radial-gradient(circle at 34% 22%, rgba(255, 255, 255, 0.54), transparent 14%);
+    radial-gradient(circle at center, transparent 0 18%, rgba(0, 0, 0, 0.95) 18.5% 22%, transparent 22.5%),
+    repeating-radial-gradient(
+      circle at center,
+      #050505 0 0.12cqw,
+      #1c1c1c 0.13cqw 0.22cqw,
+      #080808 0.23cqw 0.38cqw,
+      #2a2a2a 0.39cqw 0.44cqw
+    ),
+    conic-gradient(
+      from 0deg,
+      rgba(255,255,255,0.08),
+      transparent 18deg,
+      rgba(255,255,255,0.18) 42deg,
+      transparent 70deg,
+      rgba(255,255,255,0.05) 115deg,
+      transparent 180deg,
+      rgba(255,255,255,0.12) 230deg,
+      transparent 360deg
+    );
+
   box-shadow:
-    0 0 0 0.14cqw rgba(255, 255, 255, 0.42) inset,
+    inset 0 0 0 0.12cqw rgba(255, 255, 255, 0.35),
+    inset 0 0 2.4cqw rgba(255, 255, 255, 0.08),
+    inset 0 0 6cqw rgba(0, 0, 0, 0.95),
     0 0 1.9cqw rgba(255, 255, 255, 0.16),
     1.05cqw 1.05cqw 2.55cqw rgba(0, 0, 0, 0.78);
 }
-
 .spotify-vinyl.is-playing {
   animation: spotify-vinyl-spin 5.4s linear infinite;
 }
 
-.spotify-vinyl span {
+.spotify-vinyl::after {
+  content: "";
   position: absolute;
-  inset: 11%;
-  border-radius: inherit;
-  background:
-    conic-gradient(from 18deg, transparent 0 32deg, rgba(255, 255, 255, 0.15) 34deg 38deg, transparent 40deg 360deg);
-  mix-blend-mode: screen;
+  top: 32%;
+  left: 32%;
+  width: 36%;
+  height: 36%;
+  border-radius: 50%;
+
+  background-image: var(--spotify-cover);
+  background-size: cover;
+  background-position: center;
+
+  box-shadow:
+    inset 0 0 0 0.35cqw rgba(255, 255, 255, 0.18),
+    inset 0 0 1.2cqw rgba(0, 0, 0, 0.65),
+    0 0 0 0.35cqw rgba(0, 0, 0, 0.9),
+    0 0 1.2cqw rgba(255, 255, 255, 0.12);
 }
 
 .spotify-overlay-info {
@@ -236,16 +267,21 @@
 .spotify-overlay-info h2 {
   overflow: hidden;
   max-width: 100%;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  text-overflow: unset;
 }
 
 .spotify-overlay-info h1 {
   margin: 0;
   color: #ffffff;
-  font-size: 5.55cqw;
+  font-size: clamp(2.8cqw, 4.7cqw, 5.2cqw);
   font-weight: 900;
-  line-height: 0.94;
+  line-height: 1.02;
+
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+
   text-shadow:
     0 0.2cqw 0 rgba(255, 255, 255, 0.16),
     0 0.46cqw 1.15cqw rgba(0, 0, 0, 0.7),
@@ -253,11 +289,16 @@
 }
 
 .spotify-overlay-info h2 {
-  margin: 1.4cqw 0 2.15cqw;
+  margin: 1.1cqw 0 2.15cqw;
   color: #ff7900;
-  font-size: 2.9cqw;
+  font-size: clamp(1.8cqw, 2.45cqw, 2.9cqw);
   font-weight: 900;
-  line-height: 1.02;
+  line-height: 1.08;
+
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+
   text-shadow: 0 0 1cqw rgba(255, 100, 0, 0.46);
 }
 
@@ -314,22 +355,27 @@
 
 .spotify-spectrum {
   position: absolute;
-  left: 39.8%;
-  right: 1.3%;
-  bottom: 2.7;
+  left: 41%;
+  right: 8%;
+  bottom: 1%;
   z-index: 2;
-  height: 20.4%;
+
+  height: 22%;
   display: flex;
   align-items: flex-end;
-  gap: 0.35cqw;
-  transform: translate(-50%, 180%);
+  gap: 0.45cqw;
+
+  overflow: visible;
+  transform: none;
 }
 
 .spotify-spectrum span {
   flex: 1 1 0;
-  min-width: 0.22cqw;
-  max-width: 0.84cqw;
-  height: var(--bar-height);
+  min-width: 0.32cqw;
+  max-width: 1.05cqw;
+
+  height: calc(var(--bar-height) * 0.8);
+
   border-radius: 999px 999px 0.18cqw 0.18cqw;
   transform-origin: bottom;
   background: linear-gradient(180deg, #ffd931 0%, #ff8a00 48%, #d93c00 100%);
@@ -345,8 +391,15 @@
 }
 
 @keyframes spotify-spectrum-pulse {
-  from { transform: scaleY(0.42); opacity: 0.58; }
-  to { transform: scaleY(1); opacity: 1; }
+  from {
+    transform: scaleY(0.65);
+    opacity: 0.7;
+  }
+
+  to {
+    transform: scaleY(1.45);
+    opacity: 1;
+  }
 }
 
 @keyframes spotify-sparks {

@@ -73,8 +73,17 @@ export default function SpotifyOverlay() {
     <main className="spotify-overlay-stage" aria-label="Overlay de Spotify">
       <section className="spotify-overlay-widget">
         <div className="spotify-overlay-art-area">
-          <div className={`spotify-vinyl ${track.isPlaying ? "is-playing" : ""}`} aria-hidden="true">
+          <div
+            className={`spotify-vinyl ${track.isPlaying ? "is-playing" : ""}`}
+            aria-hidden="true"
+            style={{
+              "--spotify-cover": track.albumArt
+                ? `url("${track.albumArt}")`
+                : "radial-gradient(circle, #ff7a00, #080808)"
+            }}
+          >
             <span />
+            <div className="spotify-vinyl-print" />
           </div>
 
           <div className="spotify-cover">
@@ -86,42 +95,38 @@ export default function SpotifyOverlay() {
                 <span>{track.artists}</span>
               </div>
             )}
-            <div className="spotify-cover-caption">
-              <strong>{track.name}</strong>
-              <span>{track.artists}</span>
-            </div>
           </div>
         </div>
 
         <div className="spotify-overlay-info">
-          <div className="spotify-now">
-            <SpotifyIcon />
-            <span>REPRODUCIENDO EN SPOTIFY</span>
-          </div>
+  <div className="spotify-now">
+    <SpotifyIcon />
+    <span>REPRODUCIENDO EN SPOTIFY</span>
+  </div>
 
-          <h1>{track.name}</h1>
-          <h2>{track.artists}</h2>
+  <h1>{track.name}</h1>
+  <h2>{track.artists}</h2>
 
-          <div className="spotify-progress-row">
-            <time>{formatDuration(progress)}</time>
-            <div className="spotify-progress" aria-hidden="true">
-              <span style={{ width: `${progressPercent}%` }} />
-            </div>
-            <time>{formatDuration(track.durationMs)}</time>
-          </div>
+  <div className="spotify-progress-row">
+    <time>{formatDuration(progress)}</time>
+    <div className="spotify-progress" aria-hidden="true">
+      <span style={{ width: `${progressPercent}%` }} />
+    </div>
+    <time>{formatDuration(track.durationMs)}</time>
+  </div>
+</div>
 
-          <div className="spotify-spectrum" aria-hidden="true">
-            {SPECTRUM_BARS.map((height, index) => (
-              <span
-                key={`${height}-${index}`}
-                style={{
-                  "--bar-height": `${height}%`,
-                  "--bar-delay": `${(index % 12) * 75}ms`,
-                }}
-              />
-            ))}
-          </div>
-        </div>
+<div className="spotify-spectrum" aria-hidden="true">
+  {SPECTRUM_BARS.map((height, index) => (
+    <span
+      key={`${height}-${index}`}
+      style={{
+        "--bar-height": `${height}%`,
+        "--bar-delay": `${(index % 12) * 75}ms`,
+      }}
+    />
+  ))}
+</div>
       </section>
     </main>
   );
