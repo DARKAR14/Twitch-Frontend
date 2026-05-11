@@ -30,7 +30,8 @@ export default function SpotifyOverlay() {
   const loadStatus = useCallback(async () => {
     try {
       const { data } = await api.get("/spotify/overlay");
-      setTrack(normalizeTrack(data));
+      const nextTrack = normalizeTrack(data);
+      setTrack((prev) => nextTrack || { ...prev, isPlaying: false });
     } catch {
       setTrack((prev) => ({ ...prev, isPlaying: false }));
     }
@@ -136,7 +137,7 @@ function SpotifyIcon() {
 
 function normalizeTrack(data) {
   const source = data?.current || data?.track || data?.item || null;
-  if (!source) return { ...DEFAULT_TRACK, syncedAt: Date.now() };
+  if (!source) return null;
 
   const durationMs = readDurationMs(source);
   const progressMs = readProgressMs(data, source);
