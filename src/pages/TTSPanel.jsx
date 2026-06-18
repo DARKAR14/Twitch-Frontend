@@ -232,6 +232,32 @@ export default function TTSPanel() {
           </div>
 
           <div className="card">
+            <div className="card-title">TOP USUARIOS</div>
+            {Object.entries(
+              colaSegura.reduce((acc, msg) => {
+                acc[msg.usuario] = (acc[msg.usuario] || 0) + 1;
+                return acc;
+              }, {})
+            )
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 5)
+              .map(([user, count], i, arr) => {
+                const max = arr[0] ? arr[0][1] : 1;
+                return (
+                  <div key={user} style={{ marginBottom: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "13px" }}><strong>{user}</strong></span>
+                      <span style={{ fontSize: "11px", color: "var(--text3)" }}>{count} msg</span>
+                    </div>
+                    <div style={{ height: "6px", background: "var(--border)", borderRadius: "10px" }}>
+                      <div style={{ width: `${(count / max) * 100}%`, height: "100%", background: "var(--purple)", borderRadius: "10px" }} />
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+
+          <div className="card">
             <div className="card-title">GESTIÓN DE SERVICIO</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "12px" }}>
               <button onClick={() => abrirModal('restart')} style={btnStyle("rgba(145,71,255,0.15)", "var(--purple)")}>↻ Reiniciar</button>
