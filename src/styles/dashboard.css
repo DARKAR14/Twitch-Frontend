@@ -2402,6 +2402,78 @@ textarea:focus {
   text-align: left;
 }
 
+.risitas-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.risitas-nav button { padding: 12px 16px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--text2); cursor: pointer; font: inherit; }
+.risitas-nav button[aria-current], .risitas-nav button:hover { background: rgba(255,255,255,.09); color: var(--text); }
+.risitas-nav button:focus-visible, .birthday-editor :focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.birthday-editor { color: var(--text); }
+.birthday-editor-heading, .birthday-editor-save, .birthday-preview-heading, .birthday-field-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.birthday-editor-heading { margin-bottom: 24px; }
+.birthday-editor-heading h2 { margin: 0 0 8px; font-size: 24px; letter-spacing: -.02em; }
+.birthday-editor-heading p, .birthday-help { color: var(--text2); font-size: 13px; line-height: 1.6; }
+.birthday-save-state { color: var(--text2); font-size: 12px; white-space: nowrap; }
+.birthday-editor-columns { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(300px,.85fr); gap: 36px; align-items: start; }
+.birthday-editor-fields { min-width: 0; border: 0; padding: 0; margin: 0; }
+.birthday-form-section { padding: 0 0 28px; margin-bottom: 28px; border-bottom: 1px solid var(--border); }
+.birthday-form-section h3, .birthday-preview-heading h3 { font-size: 16px; margin: 0 0 16px; }
+.birthday-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.birthday-field { display: grid; gap: 8px; margin: 0 0 16px; min-width: 0; }
+.birthday-field > span { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--text2); }
+.birthday-field small { color: var(--text2); font-size: 11px; }
+.birthday-field input, .birthday-field select, .birthday-field textarea { box-sizing: border-box; width: 100%; min-width: 0; padding: 11px 12px; color: var(--text); background: rgba(0,0,0,.27); border: 1px solid var(--border); border-radius: 10px; font: inherit; font-size: 14px; line-height: 1.5; }
+.birthday-field select { color-scheme: dark; }
+.birthday-field textarea { resize: vertical; min-height: 80px; }
+.birthday-field input[type=color] { height: 44px; padding: 5px; cursor: pointer; }
+.birthday-check { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text2); margin: 0 0 18px; }
+.birthday-check input { width: 17px; height: 17px; accent-color: #dadadd; flex-shrink: 0; }
+.birthday-checks { display: flex; flex-wrap: wrap; gap: 0 20px; }
+.birthday-help { margin: 0 0 16px; }
+.birthday-help code { font-size: 12px; overflow-wrap: anywhere; }
+.birthday-custom-field { padding: 16px 0; border-top: 1px solid var(--border); }
+.birthday-field-actions .birthday-check { margin: 0; }
+.birthday-live-preview { position: sticky; top: 24px; min-width: 0; }
+.birthday-preview-heading h3 { margin: 0; }
+.birthday-preview-heading { margin-bottom: 12px; }
+.birthday-preview-heading span { font-size: 11px; color: var(--text2); }
+.birthday-preview-error { color: var(--danger, #ff7c88); font-size: 13px; line-height: 1.6; }
+.birthday-discord-message { background: #313338; padding: 22px; border-radius: 12px; margin: 16px 0; color: #f2f3f5; }
+.birthday-discord-author { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+.birthday-discord-author span { background: #5865f2; border-radius: 3px; font-size: 10px; padding: 2px 5px; }
+.birthday-discord-author small { color: #b5bac1; font-size: 11px; font-weight: 400; }
+.birthday-discord-content { margin: 0 0 12px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+.birthday-live-preview .discord-embed-preview { background: #2b2d31; border: 0; box-shadow: inset 4px 0 var(--embed-color); padding: 16px; }
+.birthday-live-preview .discord-embed-preview > strong { font-size: 16px; color: #fff; }
+.birthday-live-preview .discord-embed-preview > p { font-size: 14px; color: #dbdee1; }
+.birthday-live-preview .discord-embed-image { max-height: 360px; object-fit: contain; }
+.birthday-live-preview .discord-embed-thumb { width: 64px; height: 64px; }
+.birthday-live-preview a { color: #74c9fb; text-decoration: underline; }
+.birthday-embed-author { font-size: 13px; margin-bottom: 8px; }
+.birthday-embed-footer { font-size: 12px; margin-top: 14px; color: #dbdee1; }
+.birthday-embed-fields { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin-top: 12px; }
+.birthday-embed-fields > div { grid-column: 1 / -1; min-width: 0; }
+.birthday-embed-fields > div.inline { grid-column: span 1; }
+.birthday-embed-fields strong { font-size: 13px; }
+.birthday-embed-fields p { font-size: 13px; margin: 4px 0 0; color: #dbdee1; }
+.birthday-discord-message p, .birthday-embed-fields, .birthday-embed-footer, .birthday-embed-author { white-space: pre-wrap; overflow-wrap: anywhere; }
+.birthday-editor-save { position: sticky; bottom: 12px; padding: 16px; background: #18181b; border-radius: 12px; z-index: 2; }
+.birthday-editor-save > span { color: var(--text2); font-size: 12px; }
+.birthday-editor-save > div { display: flex; gap: 12px; }
+.birthday-editor button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 1000px) {
+  .birthday-editor-columns { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .birthday-live-preview { position: static; }
+  .birthday-editor-heading, .birthday-editor-save { align-items: flex-start; flex-direction: column; }
+  .birthday-editor-save { bottom: 0; }
+}
+@media (max-width: 560px) {
+  .birthday-form-grid { grid-template-columns: minmax(0,1fr); gap: 0; }
+  .birthday-editor-save > div { flex-wrap: wrap; width: 100%; }
+  .birthday-editor-save button { flex: 1; min-height: 44px; white-space: normal; }
+  .birthday-discord-message { padding: 14px; }
+  .birthday-field-actions { align-items: flex-start; flex-direction: column; }
+  .birthday-embed-fields > div.inline { grid-column: 1 / -1; }
+}
+
 .birthday-content {
   margin: -4px 0 12px;
   color: var(--text2);

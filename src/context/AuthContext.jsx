@@ -37,6 +37,7 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   const logout = async () => {
+    if (!window.dispatchEvent(new Event("darkops:before-navigate", { cancelable: true }))) return;
     await api.post("/auth/logout").catch(() => {});
     authSession.clear();
     disconnectSocket();

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
+import RisitasBirthdays from "./RisitasBirthdays";
 
 const getError = (error, fallback) => error?.response?.data?.error || error?.message || fallback;
 
@@ -16,6 +17,19 @@ function readableDiscordText(value) {
 }
 
 export default function RisitasPanel() {
+  const [view, setView] = useState("commands");
+  const [birthdayOpened, setBirthdayOpened] = useState(false);
+  return <section aria-label="Risitas Bot">
+    <nav className="risitas-nav" aria-label="Vistas de Risitas Bot">
+      <button type="button" aria-current={view === "commands" ? "page" : undefined} onClick={() => setView("commands")}>Comandos y estado</button>
+      <button type="button" aria-current={view === "birthdays" ? "page" : undefined} onClick={() => { setBirthdayOpened(true); setView("birthdays"); }}>Cumpleaños · Editor de embed</button>
+    </nav>
+    <div hidden={view !== "commands"}><RisitasOverview /></div>
+    {birthdayOpened && <div hidden={view !== "birthdays"}><RisitasBirthdays /></div>}
+  </section>;
+}
+
+function RisitasOverview() {
   const hasOverview = useRef(false);
   const [overview, setOverview] = useState(null);
   const [stale, setStale] = useState(false);

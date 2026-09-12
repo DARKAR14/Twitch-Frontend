@@ -39,7 +39,7 @@ const PAGE_PERMISSIONS = Object.freeze({
 export default function Dashboard() {
   const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
-  const [page, setPage] = useState("channel");
+  const [page, setPage] = useState(() => new URLSearchParams(window.location.search).get("view") === "risitas" ? "risitas" : "channel");
   const [socketStatus, setSocketStatus] = useState("disconnected");
   const [liveInfo, setLiveInfo] = useState(null);
   const [streamNotif, setStreamNotif] = useState(null);
@@ -85,7 +85,7 @@ export default function Dashboard() {
 
   const isMod   = user.role === "moderator" || user.role === "admin";
   const requiredPermission = PAGE_PERMISSIONS[page];
-  const visiblePage = requiredPermission && !canSee(requiredPermission) ? "channel" : page;
+  const visiblePage = requiredPermission && page !== "risitas" && !canSee(requiredPermission) ? "channel" : page;
 
   // ── FIX: navSections sin ternarios anidados rotos ──────────────
   const navSections = [
@@ -104,7 +104,7 @@ export default function Dashboard() {
         ...(isMod && canSee("spotify")    ? [{ id: "spotify",    label: "Spotify",          icon: "music"  }] : []),
         ...(isMod && canSee("birthdays")  ? [{ id: "birthdays",  label: "Cumpleaños",       icon: "cake"   }] : []),
         ...(isMod && canSee("tts")        ? [{ id: "tts",        label: "TTS Bot",          icon: "tts"    }] : []),
-        ...(isMod && canSee("risitas")    ? [{ id: "risitas",    label: "Risitas Bot",      icon: "bot"    }] : []),
+        ...(isMod                        ? [{ id: "risitas",    label: "Risitas · Discord", icon: "bot"    }] : []),
       ],
     },
     {
@@ -250,7 +250,10 @@ export default function Dashboard() {
               <button
                 key={item.id}
                 className={`nav-item ${visiblePage === item.id ? "active" : ""}`}
-                onClick={() => { setPage(item.id); setSidebarOpen(false); }}
+                onClick={() => {
+                  if (item.id !== page && !window.dispatchEvent(new Event("darkops:before-navigate", { cancelable: true }))) return;
+                  setPage(item.id); setSidebarOpen(false);
+                }}
                 title={sidebarCollapsed ? item.label : undefined}
               >
                 {SVG[item.icon]}
@@ -351,6 +354,7 @@ export default function Dashboard() {
         {visiblePage === "birthdays"    && isMod && canSee("birthdays")   && <Birthdays />}
         {visiblePage === "tts"          && isMod && canSee("tts")         && <TTSPanel />}
         {visiblePage === "risitas"      && isMod && canSee("risitas")     && <RisitasPanel />}
+        {visiblePage === "risitas" && isMod && !canSee("risitas") && <section className="card"><h2>Acceso a Risitas Bot</h2><p>Tu cuenta aún no tiene habilitado el permiso de Risitas. El administrador puede activarlo en Panel permisos → Risitas Bot. Después podrás editar los cumpleaños y administrar sus comandos.</p></section>}
       </main>
     </div>
   );
