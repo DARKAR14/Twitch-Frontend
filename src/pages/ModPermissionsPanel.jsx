@@ -1,34 +1,18 @@
-// src/pages/ModPermissionsPanel.jsx
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, getSocket } from "../lib/api";
 
-const TAB_COLORS = {
-  clips:      { color: "var(--purple)", bg: "rgba(145,70,255,0.12)", border: "rgba(145,70,255,0.3)" },
-  chat:       { color: "var(--cyan)",   bg: "rgba(0,229,255,0.1)",   border: "rgba(0,229,255,0.25)" },
-  stats:      { color: "#FFD700",       bg: "rgba(255,215,0,0.1)",   border: "rgba(255,215,0,0.25)" },
-  moderation: { color: "var(--green)",  bg: "rgba(46,204,113,0.1)",  border: "rgba(46,204,113,0.25)" },
-};
-
-function Toggle({ enabled, onChange, loading }) {
+function PermissionSwitch({ enabled, onChange, loading, label }) {
   return (
     <button
+      className={`permission-switch ${enabled ? "enabled" : ""}`}
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-label={label}
       onClick={onChange}
       disabled={loading}
-      style={{
-        width: "42px", height: "24px", borderRadius: "12px", border: "none",
-        background: enabled ? "var(--purple)" : "rgba(255,255,255,0.1)",
-        cursor: loading ? "not-allowed" : "pointer",
-        position: "relative", transition: "background 0.2s",
-        opacity: loading ? 0.6 : 1, flexShrink: 0,
-      }}
     >
-      <span style={{
-        position: "absolute", top: "3px",
-        left: enabled ? "21px" : "3px",
-        width: "18px", height: "18px", borderRadius: "50%",
-        background: "white", transition: "left 0.2s",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-      }} />
+      <span />
     </button>
   );
 }
@@ -37,211 +21,134 @@ export default function ModPermissionsPanel() {
   const [mods, setMods] = useState([]);
   const [tabs, setTabs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [toggling, setToggling] = useState({}); // { "modId:tabId": true }
-  const [recentChange, setRecentChange] = useState(null);
+  const [toggling, setToggling] = useState({});
+  const [notice, setNotice] = useState(null);
 
-  const fetchData = () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
-    api.get("/modpermissions/all")
-      .then(({ data }) => {
-        setMods(data.mods || []);
-        setTabs(data.tabs || []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    fetchData();
+    try {
+      const { data } = await api.get("/modpermissions/all");
+      setMods(data.mods || []);
+      setTabs(data.tabs || []);
+      setNotice(null);
+    } catch (error) {
+      setNotice({ type: "error", text: error?.response?.data?.error || "No se pudo cargar la matriz de permisos." });
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // Escuchar confirmaciones del socket cuando cambia un permiso
+  useEffect(() => { fetchData(); }, [fetchData]);
+
   useEffect(() => {
     const socket = getSocket();
     const handler = (data) => {
-      setMods((prev) => prev.map((m) =>
-        m.user_id === data.mod_id
-          ? { ...m, permissions: data.permissions }
-          : m
-      ));
-      setRecentChange({ mod_id: data.mod_id, tab: data.tab, enabled: data.enabled });
-      setTimeout(() => setRecentChange(null), 2500);
+      setMods((current) => current.map((mod) => mod.user_id === data.mod_id ? { ...mod, permissions: data.permissions } : mod));
+      setNotice({ type: "success", text: `Permiso ${data.tab} ${data.enabled ? "activado" : "desactivado"}.` });
     };
     socket.on("modpermissions:changed", handler);
     return () => socket.off("modpermissions:changed", handler);
   }, []);
 
-  const handleToggle = async (modId, tabId, currentValue) => {
-    const key = `${modId}:${tabId}`;
-    setToggling((prev) => ({ ...prev, [key]: true }));
-
-    // Optimistic update
-    setMods((prev) => prev.map((m) =>
-      m.user_id === modId
-        ? { ...m, permissions: { ...m.permissions, [tabId]: !currentValue } }
-        : m
-    ));
+  async function handleToggle(mod, tab, currentValue) {
+    const key = `${mod.user_id}:${tab.id}`;
+    setToggling((current) => ({ ...current, [key]: true }));
+    setMods((current) => current.map((item) => item.user_id === mod.user_id
+      ? { ...item, permissions: { ...item.permissions, [tab.id]: !currentValue } }
+      : item));
 
     try {
-      await api.patch(`/modpermissions/${modId}`, { tab: tabId, enabled: !currentValue });
-    } catch {
-      // Revertir si falla
-      setMods((prev) => prev.map((m) =>
-        m.user_id === modId
-          ? { ...m, permissions: { ...m.permissions, [tabId]: currentValue } }
-          : m
-      ));
+      await api.patch(`/modpermissions/${mod.user_id}`, { tab: tab.id, enabled: !currentValue });
+      setNotice({ type: "success", text: `${tab.label} ${!currentValue ? "activado" : "desactivado"} para @${mod.user_name}.` });
+    } catch (error) {
+      setMods((current) => current.map((item) => item.user_id === mod.user_id
+        ? { ...item, permissions: { ...item.permissions, [tab.id]: currentValue } }
+        : item));
+      setNotice({ type: "error", text: error?.response?.data?.error || `No se pudo actualizar ${tab.label}.` });
     } finally {
-      setToggling((prev) => { const n = { ...prev }; delete n[key]; return n; });
+      setToggling((current) => { const next = { ...current }; delete next[key]; return next; });
     }
-  };
+  }
 
-  const handleReset = async (modId) => {
+  async function handleReset(mod) {
     try {
-      const { data } = await api.put(`/modpermissions/${modId}/reset`);
-      setMods((prev) => prev.map((m) =>
-        m.user_id === modId ? { ...m, permissions: data.permissions } : m
-      ));
-    } catch {}
+      const { data } = await api.put(`/modpermissions/${mod.user_id}/reset`);
+      setMods((current) => current.map((item) => item.user_id === mod.user_id ? { ...item, permissions: data.permissions } : item));
+      setNotice({ type: "success", text: `Permisos de @${mod.user_name} restablecidos.` });
+    } catch (error) {
+      setNotice({ type: "error", text: error?.response?.data?.error || "No se pudieron restablecer los permisos." });
+    }
+  }
+
+  const matrixStyle = {
+    "--permission-columns": `220px repeat(${tabs.length}, minmax(118px, 1fr)) 96px`,
+    "--permission-min-width": `${316 + tabs.length * 118}px`,
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-
-      {/* Header con leyenda */}
-      <div style={{
-        padding: "14px 16px",
-        background: "rgba(145,70,255,0.06)", border: "1px solid rgba(145,70,255,0.2)",
-        borderRadius: "var(--radius)", fontSize: "13px", color: "var(--text2)", lineHeight: 1.6,
-      }}>
-        <strong style={{ color: "var(--purple)" }}>⚡ Tiempo real</strong> — Los cambios se aplican
-        instantáneamente al panel de cada moderador sin que tenga que recargar la página.
+    <section className="permissions-panel" aria-label="Permisos de moderadores">
+      <div className="permissions-live-banner">
+        <BoltIcon />
+        <div><strong>Cambios en tiempo real</strong><span>Los permisos se aplican al panel del moderador sin recargar la página.</span></div>
       </div>
 
-      {/* Toast de cambio reciente */}
-      {recentChange && (
-        <div style={{
-          padding: "10px 16px", borderRadius: "var(--radius-sm)", fontSize: "13px",
-          background: "rgba(46,204,113,0.1)", border: "1px solid rgba(46,204,113,0.3)",
-          color: "var(--green)", animation: "fadeIn 0.2s ease",
-        }}>
-          ✓ Permiso <strong>{recentChange.tab}</strong> {recentChange.enabled ? "activado" : "desactivado"}
+      {notice && (
+        <div className={`bot-notice ${notice.type}`} role={notice.type === "error" ? "alert" : "status"}>
+          {notice.type === "error" ? <AlertIcon /> : <CheckIcon />}
+          <span>{notice.text}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Cerrar aviso"><CloseIcon /></button>
         </div>
       )}
 
-      {/* Tabla de permisos */}
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-
-        {/* Header de columnas */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: `220px repeat(${tabs.length}, 1fr) 100px`,
-          padding: "12px 16px",
-          borderBottom: "1px solid var(--border)",
-          background: "rgba(255,255,255,0.02)",
-        }}>
-          <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-            Moderador
-          </div>
-          {tabs.map((tab) => {
-            const c = TAB_COLORS[tab.id] || {};
-            return (
-              <div key={tab.id} style={{ textAlign: "center", fontSize: "11px", fontWeight: 700, color: c.color || "var(--text2)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                {tab.icon} {tab.label}
-              </div>
-            );
-          })}
-          <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center" }}>
-            Reset
-          </div>
-        </div>
-
-        {/* Filas de mods */}
+      <div className="card permissions-card">
         {loading ? (
-          <div className="spinner" />
+          <div className="bot-loading" role="status"><span className="spinner" /><p>Cargando permisos…</p></div>
         ) : mods.length === 0 ? (
-          <div className="empty-state"><p>No hay moderadores en este canal</p></div>
+          <div className="bot-empty"><UsersIcon /><strong>No hay moderadores</strong><p>Cuando Twitch devuelva el equipo, aparecerá en esta matriz.</p></div>
         ) : (
-          mods.map((mod, i) => (
-            <div
-              key={mod.user_id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: `220px repeat(${tabs.length}, 1fr) 100px`,
-                padding: "14px 16px",
-                borderBottom: i < mods.length - 1 ? "1px solid var(--border)" : "none",
-                alignItems: "center",
-                transition: "background 0.15s",
-                background: recentChange?.mod_id === mod.user_id ? "rgba(145,70,255,0.04)" : "transparent",
-              }}
-            >
-              {/* Nombre del mod */}
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{
-                  width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0,
-                  background: "rgba(255,255,255,0.15)",
-                }} />
-                <div>
-                  <div style={{ fontSize: "13px", fontWeight: 600 }}>@{mod.user_name}</div>
-                  <div style={{ fontSize: "10px", color: "var(--text3)", fontFamily: "var(--font-mono)" }}>
-                    {mod.user_id}
-                  </div>
+          <div className="permissions-matrix-scroll" role="region" aria-label="Matriz de permisos; desplázate horizontalmente para ver todas las columnas" tabIndex={0}>
+            <div role="grid" aria-label="Permisos por moderador" aria-rowcount={mods.length + 1}>
+              <div className="permissions-grid permissions-grid-header" style={matrixStyle} role="row">
+                <div role="columnheader">Moderador</div>
+                {tabs.map((tab) => <div key={tab.id} role="columnheader">{tab.label}</div>)}
+                <div role="columnheader">Reset</div>
+              </div>
+
+              {mods.map((mod) => (
+                <div className="permissions-grid permissions-grid-row" style={matrixStyle} role="row" key={mod.user_id}>
+                  <div className="permission-mod" role="rowheader"><span /><div><strong>@{mod.user_name}</strong><small>{mod.user_id}</small></div></div>
+                  {tabs.map((tab) => {
+                    const key = `${mod.user_id}:${tab.id}`;
+                    const enabled = mod.permissions?.[tab.id] ?? true;
+                    return (
+                      <div className="permission-cell" role="gridcell" key={tab.id}>
+                        <PermissionSwitch
+                          enabled={enabled}
+                          loading={Boolean(toggling[key])}
+                          label={`${enabled ? "Desactivar" : "Activar"} ${tab.label} para ${mod.user_name}`}
+                          onChange={() => handleToggle(mod, tab, enabled)}
+                        />
+                        <span className={enabled ? "enabled" : ""}>{enabled ? "ON" : "OFF"}</span>
+                      </div>
+                    );
+                  })}
+                  <div className="permission-reset-cell" role="gridcell"><button type="button" onClick={() => handleReset(mod)} aria-label={`Restablecer permisos de ${mod.user_name}`}><ResetIcon />Reset</button></div>
                 </div>
-              </div>
-
-              {/* Toggles por tab */}
-              {tabs.map((tab) => {
-                const key = `${mod.user_id}:${tab.id}`;
-                const enabled = mod.permissions?.[tab.id] ?? true;
-                const c = TAB_COLORS[tab.id] || {};
-                return (
-                  <div key={tab.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                    <Toggle
-                      enabled={enabled}
-                      loading={!!toggling[key]}
-                      onChange={() => handleToggle(mod.user_id, tab.id, enabled)}
-                    />
-                    <span style={{
-                      fontSize: "10px", fontWeight: 600, padding: "1px 6px", borderRadius: "100px",
-                      background: enabled ? c.bg : "rgba(255,255,255,0.04)",
-                      color: enabled ? c.color : "var(--text3)",
-                      border: `1px solid ${enabled ? c.border : "transparent"}`,
-                      transition: "all 0.2s",
-                    }}>
-                      {enabled ? "ON" : "OFF"}
-                    </span>
-                  </div>
-                );
-              })}
-
-              {/* Botón reset */}
-              <div style={{ textAlign: "center" }}>
-                <button
-                  onClick={() => handleReset(mod.user_id)}
-                  style={{
-                    background: "none", border: "1px solid var(--border)",
-                    borderRadius: "6px", color: "var(--text3)", padding: "4px 10px",
-                    fontSize: "11px", cursor: "pointer", transition: "all 0.15s",
-                  }}
-                  onMouseEnter={(e) => { e.target.style.borderColor = "var(--purple-border)"; e.target.style.color = "var(--purple)"; }}
-                  onMouseLeave={(e) => { e.target.style.borderColor = "var(--border)"; e.target.style.color = "var(--text3)"; }}
-                >
-                  Reset
-                </button>
-              </div>
+              ))}
             </div>
-          ))
+          </div>
         )}
       </div>
 
-      {/* Botón refrescar */}
-      <button className="refresh-btn" onClick={fetchData} style={{ width: "fit-content" }}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M23 4v6h-6M1 20v-6h6"/>
-          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-        </svg>
-        Refrescar lista
-      </button>
-    </div>
+      <button className="refresh-btn permissions-refresh" type="button" onClick={fetchData} disabled={loading}><RefreshIcon />Refrescar lista</button>
+    </section>
   );
 }
+
+function BoltIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m13 2-9 12h8l-1 8 9-12h-8z"/></svg>; }
+function UsersIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>; }
+function RefreshIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>; }
+function ResetIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>; }
+function AlertIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/></svg>; }
+function CheckIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>; }
+function CloseIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 6 12 12M18 6 6 18"/></svg>; }

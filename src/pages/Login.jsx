@@ -2,7 +2,16 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import LiquidBackdrop from "../components/LiquidBackdrop";
 import "../styles/login.css";
+
+function TwitchMark({ decorative = true }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden={decorative ? "true" : undefined}>
+      <path d="M2.149 0 .537 4.119v16.836h5.731V24l4.119-3.045h3.582L21.463 12V0H2.149Zm17.314 11.104-3.582 3.582h-3.582L9.18 17.805v-3.119H5.373V2h14.09v9.104Zm-1.881-5.731h-2v5.731h2V5.373Zm-4.836 0h-2v5.731h2V5.373Z" />
+    </svg>
+  );
+}
 
 export default function Login() {
   const { user, loading } = useAuth();
@@ -20,32 +29,16 @@ export default function Login() {
 
   return (
     <div className="login-root">
-      {/* Animated background grid */}
-      <div className="login-grid" aria-hidden="true">
-        {Array.from({ length: 64 }).map((_, i) => (
-          <div key={i} className="grid-cell" style={{ animationDelay: `${(i * 0.08) % 4}s` }} />
-        ))}
+      <LiquidBackdrop />
+
+      <div className="login-brand" aria-label="DarkOps">
+        <TwitchMark />
+        <span>DARK<strong>Ops</strong></span>
       </div>
 
-      {/* Glowing orbs */}
-      <div className="orb orb-1" />
-      <div className="orb orb-2" />
-      <div className="orb orb-3" />
-
       <div className="login-card">
-        {/* Logo mark */}
         <div className="login-logo">
-          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="48" height="48" rx="12" fill="url(#lg1)" />
-            <path d="M12 10H36V28L30 34H24L20 38V34H12V10Z" fill="white" fillOpacity="0.15" />
-            <path d="M20 18H22V24H20V18ZM26 18H28V24H26V18Z" fill="white" />
-            <defs>
-              <linearGradient id="lg1" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#9146FF" />
-                <stop offset="1" stopColor="#6441A4" />
-              </linearGradient>
-            </defs>
-          </svg>
+          <TwitchMark />
         </div>
 
         <div className="login-badge">PANEL DE CONTROL</div>
@@ -55,24 +48,23 @@ export default function Login() {
         </p>
 
         <button className="login-btn" onClick={handleLogin}>
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M2.149 0L.537 4.119v16.836h5.731V24l4.119-3.045h3.582L21.463 12V0H2.149zm17.314 11.104l-3.582 3.582h-3.582l-3.119 3.119v-3.119H5.373V2h14.09v9.104zM17.582 5.373h-2v5.731h2V5.373zm-4.836 0h-2v5.731h2V5.373z"/>
-          </svg>
+          <TwitchMark />
           Iniciar sesión con Twitch
         </button>
 
         <div className="login-roles">
           <div className="role-chip">
-            <span className="role-dot admin" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m4 8 3.5 3L12 4l4.5 7L20 8l-2 10H6L4 8Z"/><path d="M7 21h10"/></svg>
             Administrador
           </div>
           <div className="role-chip">
-            <span className="role-dot mod" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9.5 12 1.7 1.7 3.7-4"/></svg>
             Moderador
           </div>
         </div>
 
         <p className="login-footer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
           Solo el broadcaster y sus moderadores pueden acceder al panel.
         </p>
       </div>

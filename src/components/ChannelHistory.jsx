@@ -3,7 +3,9 @@ import { useState, useEffect } from "react";
 import { api, getSocket } from "../lib/api";
 
 function timeAgo(iso) {
-  const diff = Date.now() - new Date(iso).getTime();
+  const timestamp = new Date(iso).getTime();
+  if (!iso || !Number.isFinite(timestamp)) return "fecha no disponible";
+  const diff = Math.max(0, Date.now() - timestamp);
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "ahora";
   if (mins < 60) return `hace ${mins}m`;
@@ -48,20 +50,16 @@ export default function ChannelHistory() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-      {history.map((entry) => (
-        <div key={entry.id} style={{
-          display: "flex", alignItems: "flex-start", gap: "12px",
-          padding: "12px 14px",
-          background: "var(--surface)", border: "1px solid var(--border)",
-          borderLeft: "3px solid var(--purple)",
-          borderRadius: "var(--radius-sm)",
-        }}>
-          <div style={{
-            width: "28px", height: "28px", borderRadius: "50%",
-            background: "var(--purple-dim)", display: "flex", alignItems: "center",
-            justifyContent: "center", flexShrink: 0, fontSize: "13px"
-          }}>✏️</div>
+    <div className="channel-history-list" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {history.map((entry) => {
+        const role = entry.changed_by_role || entry.changer_role;
+        return (
+        <article className="history-row" key={entry.id}>
+          <div className="history-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+            </svg>
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
               fontSize: "13px", fontWeight: 600, marginBottom: "3px",
@@ -70,8 +68,9 @@ export default function ChannelHistory() {
               {entry.title}
             </div>
             {entry.game_name && (
-              <div style={{ fontSize: "12px", color: "var(--purple)", marginBottom: "3px" }}>
-                🎮 {entry.game_name}
+              <div className="history-game">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M6 12h4m-2-2v4"/><path d="M15 13h.01M18 11h.01"/><path d="M6.5 6h11A4.5 4.5 0 0 1 22 10.5v3a4.5 4.5 0 0 1-7.7 3.18L12 14.38l-2.3 2.3A4.5 4.5 0 0 1 2 13.5v-3A4.5 4.5 0 0 1 6.5 6Z"/></svg>
+                {entry.game_name}
               </div>
             )}
             <div style={{ fontSize: "11px", color: "var(--text3)" }}>
@@ -79,17 +78,17 @@ export default function ChannelHistory() {
               {" "}·{" "}
               <span style={{
                 padding: "1px 6px", borderRadius: "100px",
-                background: entry.changed_by_role === "admin" ? "rgba(255,215,0,0.1)" : "rgba(0,229,255,0.1)",
-                color: entry.changed_by_role === "admin" ? "var(--gold)" : "var(--cyan)",
+                background: role === "admin" ? "rgba(215,198,141,0.1)" : "rgba(172,213,222,0.1)",
+                color: role === "admin" ? "var(--gold)" : "var(--cyan)",
                 fontSize: "10px", fontWeight: 700
-              }}>{entry.changed_by_role}</span>
+              }}>{role || "rol no disponible"}</span>
             </div>
           </div>
-          <div style={{ fontSize: "11px", color: "var(--text3)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
-            {timeAgo(entry.changed_at)}
+          <div className="history-time">
+            {timeAgo(entry.changed_at || entry.created_at)}
           </div>
-        </div>
-      ))}
+        </article>
+      );})}
     </div>
   );
 }

@@ -19,8 +19,8 @@ const MONTH_COLORS = {
 
 function Avatar({ displayName }) {
   const initials = displayName?.slice(0, 2).toUpperCase() || "??";
-  const colors = ["#9146FF", "#FF4757", "#2ECC71", "#00E5FF", "#FFD700", "#FF8C00"];
-  const color = colors[displayName?.charCodeAt(0) % colors.length] || "#9146FF";
+  const colors = ["#E8E8EA", "#B9B9BE", "#D5D5D8", "#8E8E94", "#F4F4F5", "#A5A5AA"];
+  const color = colors[displayName?.charCodeAt(0) % colors.length] || "#E8E8EA";
 
   return (
     <div style={{
@@ -183,7 +183,7 @@ export default function Birthdays() {
     ?.birthdays.filter((b) => b.day === todayDay) || [];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div className="birthdays-panel" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
       {/* Cumpleaños de hoy */}
       {todayBirthdays.length > 0 && (

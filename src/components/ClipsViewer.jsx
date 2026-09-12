@@ -64,6 +64,7 @@ export default function ClipsViewer() {
   // Cargar clips de hoy
   useEffect(() => {
     if (tab !== "today") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     api.get("/clips/today?first=50")
       .then(({ data }) => setTodayClips(data.clips || []))
@@ -74,6 +75,7 @@ export default function ClipsViewer() {
   // Cargar lista de streams
   useEffect(() => {
     if (tab !== "streams") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     api.get("/clips/streams?first=15")
       .then(({ data }) => setStreams(data.streams || []))
@@ -92,7 +94,7 @@ export default function ClipsViewer() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div className="clips-panel" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* Tabs */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <div className="tabs">

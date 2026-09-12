@@ -63,10 +63,8 @@ export default function ModManager() {
     }
   };
 
-  const onlineCount = mods.filter((m) => m.online).length;
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div className="mod-manager-panel" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
       {/* Resumen */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>

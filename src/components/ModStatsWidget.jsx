@@ -2,6 +2,12 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../lib/api";
 
+const STAT_ICONS = {
+  bans: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="m14.5 4.5 5 5"/><path d="m12 7 5 5-8.5 8.5a2.12 2.12 0 0 1-3-3Z"/><path d="M4 4h6v6H4z"/></svg>,
+  clips: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="2" y="5" width="15" height="14" rx="2"/><path d="m17 10 5-3v10l-5-3Z"/></svg>,
+  followers: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6m-3-3h6"/></svg>,
+};
+
 export default function ModStatsWidget() {
   const [stats, setStats] = useState(null);
   const pingRef = useRef(null);
@@ -26,10 +32,10 @@ export default function ModStatsWidget() {
   const maxBans = Math.max(...week.history.map((d) => d.bans), 1);
 
   return (
-    <div style={{
+    <div className="mod-stats-widget" style={{
       margin: "8px 0",
-      background: "rgba(145,70,255,0.06)",
-      border: "1px solid rgba(145,70,255,0.2)",
+      background: "rgba(255,255,255,0.04)",
+      border: "1px solid rgba(255,255,255,0.14)",
       borderRadius: "10px",
       padding: "12px",
       fontSize: "12px",
@@ -47,9 +53,9 @@ export default function ModStatsWidget() {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-        <StatRow icon="🔨" label="Bans" value={today.bans} color="#FF4757" />
-        <StatRow icon="🎬" label="Clips" value={today.clips} color="var(--purple)" />
-        <StatRow icon="👋" label="Followers" value={today.followers} color="#2ECC71" />
+        <StatRow icon={STAT_ICONS.bans} label="Bans" value={today.bans} color="#FF7C88" />
+        <StatRow icon={STAT_ICONS.clips} label="Clips" value={today.clips} color="var(--purple)" />
+        <StatRow icon={STAT_ICONS.followers} label="Followers" value={today.followers} color="#91D6AD" />
       </div>
 
       {/* Mini gráfico de bans semanal */}
@@ -85,7 +91,7 @@ export default function ModStatsWidget() {
 function StatRow({ icon, label, value, color }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <span style={{ color: "var(--text3)" }}>{icon} {label}</span>
+      <span className="mod-stat-label" style={{ color: "var(--text3)" }}>{icon} {label}</span>
       <span style={{ fontWeight: 700, color, fontFamily: "var(--font-mono)", fontSize: "13px" }}>
         {value}
       </span>

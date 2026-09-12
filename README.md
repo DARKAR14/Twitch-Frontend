@@ -1,16 +1,33 @@
-# React + Vite
+# DarkOps — Twitch Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Panel React/Vite para operar Twitch, TTS Bot y Risitas Bot desde una sola sesión autenticada.
 
-Currently, two official plugins are available:
+## Desarrollo
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+Variables del navegador:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```env
+VITE_API_URL=http://localhost:3000
+VITE_CHANNEL_NAME=darkar1419
+```
 
-## Expanding the ESLint configuration
+`VITE_API_URL` siempre apunta al backend de Twitch. No configures aquí `PANEL_API_TOKEN`, `ADMIN_TOKEN` ni la API key de Risitas: toda conexión con los bots se realiza servidor-a-servidor desde `twitch-backend`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Paneles de bots
+
+- **TTS Bot:** estado del servicio y de OBS, compositor autenticado, selección dinámica de voz, preguntas a IA, cola y controles administrativos.
+- **Risitas Bot:** estado de Discord, latencia, servidores, comandos activables, sincronización y vista previa del embed de cumpleaños.
+- Los paneles hacen polling moderado mientras la pestaña está visible y muestran estados de carga, caída, reintento y confirmación.
+- Los moderadores solo ven cada apartado cuando el admin habilita los permisos `tts` o `risitas`.
+
+## Verificación
+
+```bash
+npm run lint
+npm run build
+```

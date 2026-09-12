@@ -57,11 +57,13 @@ export default function EventSubPanel() {
     try {
       await api.delete(`/eventsub/unsubscribe/${id}`);
       setSubs((prev) => prev.filter((s) => s.id !== id));
-    } catch {}
+    } catch {
+      // La lista se sincronizará de nuevo en la próxima actualización.
+    }
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+    <div className="eventsub-panel" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
 
       {/* Banner de estado */}
       {!hasPublicUrl && (

@@ -246,7 +246,7 @@ export default function SpotifyPanel() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+    <div className="spotify-panel" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
 
       {/* Header estado */}
       <div style={{

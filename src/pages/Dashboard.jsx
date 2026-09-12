@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { connectSocket, getSocket } from "../lib/api";
+import { connectSocket } from "../lib/api";
 import ChannelEditor from "../components/ChannelEditor";
 import ChannelHistory from "../components/ChannelHistory";
 import ClipsViewer from "../components/ClipsViewer";
@@ -18,7 +18,23 @@ import SpotifyPanel from "./SpotifyPanel";
 import VIPManager from "./VIPManager";
 import Birthdays from "./Birthdays";
 import TTSPanel from "./TTSPanel";
+import RisitasPanel from "./RisitasPanel";
 import "../styles/dashboard.css";
+
+const PAGE_PERMISSIONS = Object.freeze({
+  "clips-today": "clips",
+  moderation: "moderation",
+  chat: "chat",
+  spotify: "spotify",
+  birthdays: "birthdays",
+  tts: "tts",
+  risitas: "risitas",
+  modperms: "modperms",
+  modteam: "modteam",
+  eventsub: "eventsub",
+  "chan-history": "chan-history",
+  vip: "vip",
+});
 
 export default function Dashboard() {
   const { user, logout, loading } = useAuth();
@@ -27,6 +43,8 @@ export default function Dashboard() {
   const [socketStatus, setSocketStatus] = useState("disconnected");
   const [liveInfo, setLiveInfo] = useState(null);
   const [streamNotif, setStreamNotif] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { canSee } = usePermissions();
 
   useEffect(() => { if (!loading && !user) navigate("/"); }, [user, loading, navigate]);
@@ -65,15 +83,16 @@ export default function Dashboard() {
   );
   if (!user) return null;
 
-  const isAdmin = user.role === "admin";
   const isMod   = user.role === "moderator" || user.role === "admin";
+  const requiredPermission = PAGE_PERMISSIONS[page];
+  const visiblePage = requiredPermission && !canSee(requiredPermission) ? "channel" : page;
 
   // ── FIX: navSections sin ternarios anidados rotos ──────────────
   const navSections = [
     {
-      label: "Stream",
+      label: "Principal",
       items: [
-        ...(isMod                          ? [{ id: "channel",     label: "Canal en vivo", icon: "broadcast" }] : []),
+        ...(isMod                          ? [{ id: "channel",     label: "Panel en vivo", icon: "broadcast" }] : []),
         ...(isMod && canSee("clips")       ? [{ id: "clips-today", label: "Clips",         icon: "clips"     }] : []),
       ],
     },
@@ -85,6 +104,7 @@ export default function Dashboard() {
         ...(isMod && canSee("spotify")    ? [{ id: "spotify",    label: "Spotify",          icon: "music"  }] : []),
         ...(isMod && canSee("birthdays")  ? [{ id: "birthdays",  label: "Cumpleaños",       icon: "cake"   }] : []),
         ...(isMod && canSee("tts")        ? [{ id: "tts",        label: "TTS Bot",          icon: "tts"    }] : []),
+        ...(isMod && canSee("risitas")    ? [{ id: "risitas",    label: "Risitas Bot",      icon: "bot"    }] : []),
       ],
     },
     {
@@ -114,34 +134,74 @@ export default function Dashboard() {
     star:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
     cake:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v2"/><path d="M12 8v2"/><path d="M17 8v2"/><path d="M7 4h.01"/><path d="M12 4h.01"/><path d="M17 4h.01"/></svg>,
     tts:       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>,
+    bot:       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 3v4M8 12h.01M16 12h.01M8 16h8"/></svg>,
   };
 
   const PAGE_TITLES = {
-    channel:        ["Canal en vivo",        "Cambios instantáneos vía Twitch API"],
-    "clips-today":  ["Clips de hoy",         "Todos los clips del stream actual"],
-    moderation:     ["Actividad del canal",  "Seguidores, bans y timeouts en tiempo real"],
-    chat:           ["Chat controls",        "Ban · Timeout · Unban directo"],
+    channel:        ["Panel en vivo",        "Todo lo que necesitas, en tiempo real."],
+    "clips-today":  ["Clips",                "Todos los clips del stream actual."],
+    moderation:     ["Logs de actividad",    "Registro completo de eventos y moderación en tiempo real."],
+    chat:           ["Chat control",          "Gestiona usuarios y sanciones del chat en tiempo real."],
     stats:          ["Mis estadísticas",     "Tu actividad como moderador"],
-    modperms:       ["Panel mod permisos",   "Controla qué ve cada moderador en tiempo real"],
+    modperms:       ["Panel de permisos",    "Controla qué ve cada moderador en tiempo real."],
     modteam:        ["Equipo de moderación", "Gestiona tus mods"],
     eventsub:       ["EventSub",             "Gestión de webhooks en tiempo real de Twitch"],
     "chan-history":  ["Historial de cambios", "Registro de todos los cambios del canal"],
-    spotify:        ["Spotify",              "Cola de música y solicitudes de viewers"],
+    spotify:        ["Spotify",              "Gestiona la cola musical y las solicitudes de viewers."],
     vip:            ["VIP Manager",          "Gestiona los VIPs del canal"],
-    birthdays:      ["Cumpleaños",           "Cumpleaños de la comunidad"],
-    tts:            ["TTS Bot",              "Cola de texto a voz en tiempo real"],
+    birthdays:      ["Cumpleaños",           "Fechas especiales de tu comunidad."],
+    tts:            ["TTS Bot",              "Gestiona la cola de texto a voz en tiempo real."],
+    risitas:        ["Risitas Bot",          "Supervisa Discord, sus comandos y mensajes de comunidad."],
   };
 
+  const dashboardStats = [
+    {
+      label: "Espectadores",
+      value: liveInfo?.live ? liveInfo.viewer_count?.toLocaleString() || "0" : "—",
+      detail: liveInfo?.live === false ? "Canal offline" : liveInfo?.live ? "En vivo ahora" : "Estado no disponible",
+      icon: SVG.broadcast,
+    },
+    {
+      label: "Conexión",
+      value: socketStatus === "connected" ? "ON" : "OFF",
+      detail: "Actualización en tiempo real",
+      icon: SVG.bolt,
+      state: socketStatus,
+    },
+    {
+      label: "Acceso",
+      value: user.role === "admin" ? "ADMIN" : "MOD",
+      detail: "Permisos de Twitch",
+      icon: SVG.shield,
+    },
+    {
+      label: "Canal",
+      value: import.meta.env.VITE_CHANNEL_NAME || "—",
+      detail: "Espacio de trabajo activo",
+      icon: SVG.clips,
+    },
+  ];
+
   return (
-    <div className="dash-layout">
+    <div className={`dash-layout ${sidebarOpen ? "sidebar-open" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
 
       {/* ── Topbar ── */}
       <header className="topbar">
+        <button
+          className="sidebar-toggle"
+          type="button"
+          aria-label="Abrir navegación"
+          aria-expanded={sidebarOpen}
+          onClick={() => setSidebarOpen((open) => !open)}
+        >
+          <span />
+          <span />
+        </button>
         <div className="topbar-brand">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--purple)" }}>
             <path d="M2.149 0L.537 4.119v16.836h5.731V24l4.119-3.045h3.582L21.463 12V0H2.149zm17.314 11.104l-3.582 3.582h-3.582l-3.119 3.119v-3.119H5.373V2h14.09v9.104z" />
           </svg>
-          DARK<span>Ops</span>
+          <span className="brand-word">DARK<em>Ops</em></span>
         </div>
 
         <div className="topbar-right">
@@ -180,18 +240,21 @@ export default function Dashboard() {
       </header>
 
       {/* ── Sidebar ── */}
-      <nav className="sidebar">
+      <button className="sidebar-scrim" type="button" aria-label="Cerrar navegación" onClick={() => setSidebarOpen(false)} />
+
+      <nav className="sidebar" aria-label="Navegación principal">
         {navSections.map((section) => section.items.length > 0 && (
           <div key={section.label}>
             <div className="sidebar-section">{section.label}</div>
             {section.items.map((item) => (
               <button
                 key={item.id}
-                className={`nav-item ${page === item.id ? "active" : ""}`}
-                onClick={() => setPage(item.id)}
+                className={`nav-item ${visiblePage === item.id ? "active" : ""}`}
+                onClick={() => { setPage(item.id); setSidebarOpen(false); }}
+                title={sidebarCollapsed ? item.label : undefined}
               >
                 {SVG[item.icon]}
-                {item.label}
+                <span className="nav-label">{item.label}</span>
               </button>
             ))}
           </div>
@@ -199,27 +262,67 @@ export default function Dashboard() {
 
         {isMod && <ModStatsWidget />}
 
-        <div style={{ marginTop: "auto", padding: "14px 10px 4px", borderTop: "1px solid var(--border)" }}>
+        <div className="sidebar-channel">
           <div style={{ fontSize: "11px", color: "var(--text3)", lineHeight: 1.8 }}>
             <div>Canal</div>
-            <div style={{ color: "var(--purple)", fontWeight: 600, fontFamily: "var(--font-mono)" }}>
+            <div style={{ color: "var(--text)", fontWeight: 600 }}>
               {import.meta.env.VITE_CHANNEL_NAME || "—"}
             </div>
           </div>
         </div>
+
+        <div className="mobile-account">
+          <div className="mobile-account-user">
+            {user.profile_image_url ? (
+              <img src={user.profile_image_url} alt="" />
+            ) : (
+              <span aria-hidden="true">{user.display_name?.slice(0, 1) || "D"}</span>
+            )}
+            <div>
+              <strong>{user.display_name}</strong>
+              <small>{user.role === "admin" ? "Administrador" : "Moderador"}</small>
+            </div>
+          </div>
+          <button type="button" onClick={logout}>Salir</button>
+        </div>
+
+        <button
+          className="sidebar-collapse"
+          type="button"
+          aria-label={sidebarCollapsed ? "Expandir navegación" : "Colapsar navegación"}
+          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d={sidebarCollapsed ? "m9 18 6-6-6-6" : "m15 18-6-6 6-6"}/></svg>
+          <span>{sidebarCollapsed ? "Expandir" : "Colapsar"}</span>
+        </button>
       </nav>
 
       {/* ── Main ── */}
       <main className="main-content">
-        {PAGE_TITLES[page] && (
+        {PAGE_TITLES[visiblePage] && (
           <div className="page-header">
-            <h1 className="page-title">{PAGE_TITLES[page][0]}</h1>
-            <span className="page-sub">{PAGE_TITLES[page][1]}</span>
+            <h1 className="page-title">{PAGE_TITLES[visiblePage][0]}</h1>
+            <p className="page-sub">{PAGE_TITLES[visiblePage][1]}</p>
           </div>
         )}
 
-        {page === "channel" && isMod && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", alignItems: "start" }}>
+        {visiblePage === "channel" && isMod && (
+          <section className="dashboard-stats" aria-label="Estado del panel">
+            {dashboardStats.map((stat) => (
+              <article className={`dashboard-stat ${stat.state || ""}`} key={stat.label}>
+                <div className="dashboard-stat-icon">{stat.icon}</div>
+                <div>
+                  <span>{stat.label}</span>
+                  <strong>{stat.value}</strong>
+                  <small>{stat.detail}</small>
+                </div>
+              </article>
+            ))}
+          </section>
+        )}
+
+        {visiblePage === "channel" && isMod && (
+          <div className="channel-grid">
             <div className="card">
               <div className="card-title">{SVG.broadcast} Editar canal</div>
               <ChannelEditor />
@@ -231,22 +334,23 @@ export default function Dashboard() {
           </div>
         )}
 
-        {page === "clips-today"  && isMod && canSee("clips")      && <ClipsViewer initialTab="today" />}
-        {page === "moderation"   && isMod && canSee("moderation")  && <ModerationLog />}
-        {page === "chat"         && isMod && canSee("chat")        && <ChatControls />}
-        {page === "modperms"     && canSee("modperms")             && <ModPermissionsPanel />}
-        {page === "modteam"      && canSee("modteam")              && <ModManager />}
-        {page === "eventsub"     && canSee("eventsub")             && <EventSubPanel />}
-        {page === "chan-history"  && canSee("chan-history")         && (
+        {visiblePage === "clips-today"  && isMod && canSee("clips")      && <ClipsViewer initialTab="today" />}
+        {visiblePage === "moderation"   && isMod && canSee("moderation")  && <ModerationLog />}
+        {visiblePage === "chat"         && isMod && canSee("chat")        && <ChatControls />}
+        {visiblePage === "modperms"     && canSee("modperms")             && <ModPermissionsPanel />}
+        {visiblePage === "modteam"      && canSee("modteam")              && <ModManager />}
+        {visiblePage === "eventsub"     && canSee("eventsub")             && <EventSubPanel />}
+        {visiblePage === "chan-history"  && canSee("chan-history")         && (
           <div className="card">
             <div className="card-title">{SVG.clock} Historial completo de cambios</div>
             <ChannelHistory />
           </div>
         )}
-        {page === "spotify"      && canSee("spotify")              && <SpotifyPanel />}
-        {page === "vip"          && canSee("vip")                  && <VIPManager />}
-        {page === "birthdays"    && isMod && canSee("birthdays")   && <Birthdays />}
-        {page === "tts"          && isMod && canSee("tts")         && <TTSPanel />}
+        {visiblePage === "spotify"      && canSee("spotify")              && <SpotifyPanel />}
+        {visiblePage === "vip"          && canSee("vip")                  && <VIPManager />}
+        {visiblePage === "birthdays"    && isMod && canSee("birthdays")   && <Birthdays />}
+        {visiblePage === "tts"          && isMod && canSee("tts")         && <TTSPanel />}
+        {visiblePage === "risitas"      && isMod && canSee("risitas")     && <RisitasPanel />}
       </main>
     </div>
   );

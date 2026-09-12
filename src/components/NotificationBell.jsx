@@ -64,8 +64,12 @@ export default function NotificationBell() {
   };
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div className="notification-bell" ref={ref} style={{ position: "relative" }}>
       <button
+        className="notification-trigger"
+        type="button"
+        aria-label="Abrir notificaciones"
+        aria-expanded={open}
         onClick={handleOpen}
         style={{
           position: "relative",
@@ -95,7 +99,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div style={{
+        <div className="notification-popover" style={{
           position: "absolute", top: "calc(100% + 8px)", right: 0,
           width: "320px", maxHeight: "400px", overflowY: "auto",
           background: "#10101d", border: "1px solid var(--border)",
@@ -121,7 +125,7 @@ export default function NotificationBell() {
                 <div key={n.id} style={{
                   display: "flex", gap: "10px", padding: "10px 14px",
                   borderBottom: "1px solid rgba(255,255,255,0.04)",
-                  background: n.read ? "transparent" : "rgba(145,70,255,0.04)",
+                  background: n.read ? "transparent" : "rgba(255,255,255,0.045)",
                   transition: "background 0.2s",
                 }}>
                   <span style={{

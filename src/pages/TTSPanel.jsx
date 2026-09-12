@@ -1,303 +1,207 @@
-// src/pages/TTSPanel.jsx
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { api } from "../lib/api";
 
-const BOT_WS_URL = import.meta.env.VITE_BOT_WS_URL || "ws://localhost:3000";
-const BOT_API_URL = import.meta.env.VITE_BOT_API_URL || "http://localhost:3000";
+const LANGUAGES = { es: "Español", en: "Inglés", ja: "Japonés", ru: "Ruso", pt: "Portugués" };
+const getError = (error, fallback) => error?.response?.data?.error || error?.message || fallback;
 
-const FLAGS = { es: "🇪🇸", en: "🇺🇸", ja: "🇯🇵", ru: "🇷🇺", pt: "🇧🇷" };
-const COMANDOS = [
-  { cmd: "!habla",    lang: "Español",  flag: "🇪🇸" },
-  { cmd: "!speak",    lang: "Inglés",   flag: "🇺🇸" },
-  { cmd: "!onichan",  lang: "Japonés",  flag: "🇯🇵" },
-  { cmd: "!sukablad", lang: "Ruso",     flag: "🇷🇺" },
-  { cmd: "!cr7",      flag: "🇧🇷",       lang: "Portugués" },
-  { cmd: "!paja",     flag: "🥴",       lang: "El clásico" },
-];
+function formatAge(value) {
+  if (!value) return "Sin espera";
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
 
 export default function TTSPanel() {
-  const [cola, setCola] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [botStats, setBotStats] = useState(null);
-  const [wsStatus, setWsStatus] = useState("disconnected");
-  const [current, setCurrent] = useState(null);
+  const { user } = useAuth();
+  const hasOverview = useRef(false);
+  const [overview, setOverview] = useState(null);
+  const [stale, setStale] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [confirmandoLimpiar, setConfirmandoLimpiar] = useState(false);
-  const wsRef = useRef(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const [message, setMessage] = useState("");
+  const [voice, setVoice] = useState("auto");
+  const [action, setAction] = useState("speak");
+  const [sending, setSending] = useState(false);
+  const [clearArmed, setClearArmed] = useState(false);
+  const [serviceAction, setServiceAction] = useState(null);
+  const [serviceBusy, setServiceBusy] = useState(false);
 
-  // ── Estado para el Modal Personalizado ──
-  const [modalConfig, setModalConfig] = useState({ show: false, accion: null, titulo: "", mensaje: "", estado: 'idle' }); // idle, loading, success, error
-
-  // ── Carga de datos blindada ──
-  const fetchData = useCallback(async () => {
+  const loadOverview = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setRefreshing(true);
     try {
-      const ttsRes = await fetch(`${BOT_API_URL}/cola`);
-      if (!ttsRes.ok) throw new Error();
-      
-      const resJson = await ttsRes.json();
-      
-      const mensajesExtraidos = resJson.data?.mensajes || resJson.mensajes || [];
-      setCola(Array.isArray(mensajesExtraidos) ? mensajesExtraidos : []);
-      setStats(resJson.data?.total || resJson.stats || resJson.total || null);
-
-      const botRes = await fetch(`${BOT_API_URL}/stats`);
-      if (botRes.ok) setBotStats(await botRes.json());
-    } catch (err) {
-      setCola([]);
+      const { data } = await api.get("/bots/tts/overview");
+      hasOverview.current = true;
+      setOverview(data);
+      setStale(false);
+      setNotice((current) => current?.type === "success" ? current : null);
+    } catch (error) {
+      setStale(true);
+      const suffix = hasOverview.current ? " Los datos anteriores quedan marcados como no verificados." : "";
+      setNotice({ type: "error", text: `${getError(error, "No se pudo conectar con TTS Bot.")}${suffix}` });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  // ── WebSocket ──
   useEffect(() => {
-    let t;
-    const conectar = () => {
-      const ws = new WebSocket(BOT_WS_URL);
-      wsRef.current = ws;
-      ws.onopen = () => setWsStatus("connected");
-      ws.onmessage = (e) => {
-        try {
-          const d = JSON.parse(e.data);
-          if (d.tipo === "nuevo") { setCurrent(d); fetchData(); }
-        } catch {}
-      };
-      ws.onclose = () => {
-        setWsStatus("disconnected");
-        t = setTimeout(conectar, 3000);
-      };
-    };
-    conectar();
-    return () => { wsRef.current?.close(); clearTimeout(t); };
-  }, [fetchData]);
+    loadOverview();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") loadOverview({ silent: true });
+    }, 20_000);
+    return () => window.clearInterval(timer);
+  }, [loadOverview]);
 
-  // ── Acciones de Cola ──
-  const manejarLimpiar = async () => {
-    if (!confirmandoLimpiar) {
-      setConfirmandoLimpiar(true);
-      setTimeout(() => setConfirmandoLimpiar(false), 3000);
+  const capabilities = overview?.capabilities || {};
+  const queue = Array.isArray(overview?.queue?.mensajes) ? overview.queue.mensajes : [];
+  const stats = overview?.stats || {};
+  const queueStats = stats.cola || {};
+  const voices = Array.isArray(capabilities.voices) ? capabilities.voices : [];
+  const maxMessage = Number(capabilities.maxMessage) || 500;
+  const currentId = stats.playback?.activoId || null;
+  const provider = stats.tts?.provider || "No informado";
+  const languageRows = useMemo(() => Object.entries(LANGUAGES).map(([id, label]) => ({
+    id, label, count: queueStats.porIdioma?.[id] || 0,
+  })), [queueStats.porIdioma]);
+
+  async function submitMessage(event) {
+    event.preventDefault();
+    const cleanMessage = message.trim();
+    if (!cleanMessage) return;
+    setSending(true);
+    setNotice(null);
+    try {
+      const { data } = await api.post("/bots/tts/messages", { message: cleanMessage, voice, action });
+      setMessage("");
+      setNotice({ type: "success", text: `Mensaje añadido${data.position ? ` en la posición ${data.position}` : ""}.` });
+      await loadOverview({ silent: true });
+    } catch (error) {
+      setNotice({ type: "error", text: getError(error, "No se pudo enviar el mensaje.") });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function clearQueue() {
+    if (!clearArmed) {
+      setClearArmed(true);
+      window.setTimeout(() => setClearArmed(false), 4_000);
       return;
     }
+    setRefreshing(true);
     try {
-      const res = await fetch(`${BOT_API_URL}/cola`, { method: "DELETE" });
-      if (res.ok) {
-        setCola([]);
-        setCurrent(null);
-        setConfirmandoLimpiar(false);
-        fetchData();
-      }
-    } catch (e) {
-      setConfirmandoLimpiar(false);
+      const { data } = await api.delete("/bots/tts/queue");
+      const removed = Array.isArray(data.eliminados) ? data.eliminados.length : queue.length;
+      setNotice({ type: "success", text: `Cola limpiada: ${removed} mensaje${removed === 1 ? "" : "s"}.` });
+      setClearArmed(false);
+      await loadOverview({ silent: true });
+    } catch (error) {
+      setNotice({ type: "error", text: getError(error, "No se pudo limpiar la cola.") });
+    } finally {
+      setRefreshing(false);
     }
-  };
+  }
 
-  // ── Lógica de Modal ──
-  const abrirModal = (tipo) => {
-    if (tipo === 'restart') {
-      setModalConfig({
-        show: true,
-        accion: 'restart',
-        titulo: "¿Deseas reiniciar el bot?",
-        mensaje: "El proceso tardará aproximadamente entre 40 y 60 segundos en volver a estar online.",
-        estado: 'idle'
-      });
-    } else {
-      setModalConfig({
-        show: true,
-        accion: 'suspend',
-        titulo: "¿Suspender el servicio?",
-        mensaje: "Solo el propietario puede iniciarlo de nuevo desde el Dashboard de Render.",
-        estado: 'idle'
-      });
-    }
-  };
-
-  const confirmarAccionRender = async () => {
-    const { accion } = modalConfig;
-    setModalConfig(prev => ({ ...prev, estado: 'loading' }));
-    
+  async function manageService() {
+    if (!serviceAction) return;
+    setServiceBusy(true);
     try {
-      const res = await fetch(`${BOT_API_URL}/admin/servicio/${accion}`, { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (res.ok) {
-        setModalConfig(prev => ({ ...prev, estado: 'success', mensaje: "¡Comando enviado con éxito!" }));
-        setTimeout(() => setModalConfig(prev => ({ ...prev, show: false })), 1500);
-      } else {
-        throw new Error();
-      }
-    } catch (err) {
-      setModalConfig(prev => ({ ...prev, estado: 'error', titulo: "Error", mensaje: "No se pudo conectar con el bot." }));
-      setTimeout(() => setModalConfig(prev => ({ ...prev, show: false })), 2000);
+      await api.post(`/bots/tts/service/${serviceAction}`);
+      setNotice({ type: "success", text: serviceAction === "restart" ? "Reinicio solicitado." : "Suspensión solicitada." });
+      setServiceAction(null);
+    } catch (error) {
+      setNotice({ type: "error", text: getError(error, "No se pudo gestionar el servicio.") });
+    } finally {
+      setServiceBusy(false);
     }
-  };
+  }
 
-  const colaSegura = Array.isArray(cola) ? cola : [];
-  const porIdioma = stats?.porIdioma || {};
-  const wsClientes = botStats?.websocket?.total || 0;
+  if (loading && !overview) return <PanelLoading label="Cargando la operación de TTS Bot" />;
+  if (!overview) return <PanelUnavailable message={notice?.text} onRetry={() => loadOverview()} busy={refreshing} />;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px", position: "relative" }}>
-      
-      {/* Modal Personalizado */}
-      {modalConfig.show && (
-        <div style={overlayStyle}>
-          <div className="card" style={modalStyle}>
-            <h3 style={{ marginTop: 0, color: modalConfig.estado === 'error' ? "var(--red)" : "var(--purple)" }}>{modalConfig.titulo}</h3>
-            <p style={{ color: "var(--text2)", fontSize: "14px", lineHeight: "1.5" }}>{modalConfig.mensaje}</p>
-            
-            <div style={{ display: "flex", gap: "10px", marginTop: "20px", justifyContent: "flex-end" }}>
-              {modalConfig.estado === 'idle' && (
-                <>
-                  <button onClick={() => setModalConfig(prev => ({ ...prev, show: false }))} style={btnStyle("var(--bg2)", "var(--text3)")}>Cancelar</button>
-                  <button onClick={confirmarAccionRender} style={btnStyle("var(--purple)", "#fff")}>Confirmar</button>
-                </>
-              )}
-              {modalConfig.estado === 'loading' && <span style={{ color: "var(--purple)", fontSize: "12px", fontWeight: "bold" }}>Procesando orden...</span>}
-              {modalConfig.estado === 'success' && <span style={{ color: "var(--green)", fontSize: "12px", fontWeight: "bold" }}>✅ Enviado</span>}
-            </div>
-          </div>
-        </div>
-      )}
+    <section className={`bot-panel tts-panel ${stale ? "is-stale" : ""}`} aria-label="Operación de TTS Bot">
+      {notice && <Notice notice={notice} onClose={() => setNotice(null)} />}
 
-      {/* Indicadores Superiores */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px" }}>
-        <StatCard label="En cola" value={colaSegura.length} sub="mensajes pendientes" color="var(--purple)" />
-        <StatCard label="OBS" value={wsClientes > 0 ? "ON" : "OFF"} sub={`${wsClientes} activos`} color={wsClientes > 0 ? "var(--green)" : "var(--red)"} />
-        <StatCard label="Bot Status" value={wsStatus === "connected" ? "Online" : "Offline"} sub="WebSocket" color={wsStatus === "connected" ? "var(--green)" : "var(--red)"} />
-        <StatCard label="Usuarios" value={stats?.usuariosUnicos ?? "—"} sub="únicos hoy" color="var(--text1)" />
+      <div className="bot-metrics" aria-label="Estado de TTS Bot">
+        <Metric label="En cola" value={queue.length} detail={`${queueStats.generando || 0} generando`} icon="queue" />
+        <Metric label="Reproductor OBS" value={stale ? "No verificado" : (stats.websocket?.total || 0) > 0 ? "Conectado" : "Sin cliente"} detail={stale ? "Último estado conservado" : `${stats.websocket?.total || 0} cliente(s)`} icon="monitor" state={stale ? "bad" : (stats.websocket?.total || 0) > 0 ? "good" : "muted"} />
+        <Metric label="Servicio" value={stale ? "Sin conexión" : overview.online ? "Online" : "Offline"} detail={stale ? "Datos anteriores" : `Proveedor ${provider}`} icon="pulse" state={!stale && overview.online ? "good" : "bad"} />
+        <Metric label="Usuarios" value={queueStats.usuariosUnicos || 0} detail={`Espera mayor ${formatAge(queueStats.masAntiguo)}`} icon="users" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "20px", alignItems: "start" }}>
-        
-        {/* Panel Izquierdo: La Cola con altura inteligente */}
-        <div className="card" style={{ display: "flex", flexDirection: "column", maxHeight: "650px" }}>
-          <div className="card-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-            <span><PulseDot active={wsStatus === "connected"} /> COLA TTS</span>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={fetchData} style={btnStyle("var(--border)", "var(--text2)")}>↻</button>
-              <button 
-                onClick={manejarLimpiar} 
-                style={btnStyle(confirmandoLimpiar ? "var(--red)" : "rgba(255,71,87,0.1)", confirmandoLimpiar ? "#fff" : "var(--red)")}
-                disabled={colaSegura.length === 0 && !confirmandoLimpiar}
-              >
-                {confirmandoLimpiar ? "⚠️ ¿Seguro?" : "🗑 Limpiar cola"}
-              </button>
+      <div className="tts-workspace">
+        <div className="bot-primary-stack">
+          <article className="card bot-compose-card">
+            <div className="bot-card-heading bot-card-heading-row">
+              <div><h2>Enviar al TTS</h2><p>Emisión autenticada a nombre de {user?.display_name || "tu cuenta de Twitch"}.</p></div>
+              <span className="bot-identity-chip">{user?.display_name || "Moderador"}</span>
             </div>
-          </div>
-
-          <div style={{ overflowY: "auto", flex: 1, paddingRight: "5px" }}>
-            {current && (
-              <div style={{ background: "rgba(145,71,255,0.08)", border: "1px solid rgba(145,71,255,0.2)", borderRadius: "8px", padding: "12px", marginBottom: "15px" }}>
-                <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: 800 }}>REPRODUCIENDO</div>
-                <div style={{ fontSize: "13px" }}>{FLAGS[current.idioma]} <strong>{current.usuario}</strong>: {current.mensaje}</div>
-              </div>
-            )}
-
-            {loading ? (
-              <div style={{ padding: "40px", textAlign: "center" }}>Cargando...</div>
-            ) : colaSegura.length === 0 ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "var(--text3)" }}>📭 Cola vacía</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {colaSegura.map((e, i) => (
-                  <QueueItem key={e.id || i} entry={e} position={i + 1} />
+            <form className="tts-compose-form" onSubmit={submitMessage}>
+              <fieldset className="bot-segmented">
+                <legend>Acción</legend>
+                {(capabilities.actions || ["speak", "ask"]).map((item) => (
+                  <label key={item}><input type="radio" name="tts-action" checked={action === item} onChange={() => setAction(item)} /><span>{item === "ask" ? "Preguntar a IA" : "Hablar"}</span></label>
                 ))}
+              </fieldset>
+              <label className="bot-field"><span>Voz</span><select value={voice} onChange={(event) => setVoice(event.target.value)}>
+                {voices.length === 0 && <option value="auto">Automática</option>}
+                {voices.map((item) => <option key={item.id} value={item.id}>{item.label || item.id}</option>)}
+              </select></label>
+              <label className="bot-field tts-message-field"><span>Mensaje</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={maxMessage} placeholder={action === "ask" ? "Escribe una pregunta para la IA…" : "Escribe el mensaje que debe sonar en stream…"} rows="4" /><small>{message.length}/{maxMessage}</small></label>
+              <div className="bot-form-footer"><span>Cooldown del panel: {capabilities.cooldownSeconds || 0}s</span><button className="save-btn bot-submit" type="submit" disabled={sending || stale || !message.trim()}><SendIcon />{sending ? "Enviando…" : action === "ask" ? "Enviar pregunta" : "Enviar mensaje"}</button></div>
+            </form>
+          </article>
+
+          <article className="card bot-queue-card">
+            <div className="bot-card-heading bot-card-heading-row">
+              <div><h2>Cola de reproducción</h2><p>Orden FIFO actualizado desde el servicio.</p></div>
+              <div className="bot-actions">
+                <button className="refresh-btn" type="button" onClick={() => loadOverview()} disabled={refreshing}><RefreshIcon />{refreshing ? "Actualizando" : "Actualizar"}</button>
+                <button className={`bot-danger-button ${clearArmed ? "armed" : ""}`} type="button" onClick={clearQueue} disabled={queue.length === 0 || refreshing || stale}><TrashIcon />{clearArmed ? "Confirmar limpieza" : "Limpiar cola"}</button>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Panel Derecho */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          
-          <div className="card">
-            <div className="card-title">IDIOMAS</div>
-            {Object.keys(FLAGS).map(l => (
-              <LanguageRow key={l} lang={l} count={porIdioma[l] || 0} max={Math.max(...Object.values(porIdioma), 1)} />
-            ))}
-          </div>
-
-          <div className="card">
-            <div className="card-title">COMANDOS</div>
-            {COMANDOS.map(c => (
-              <div key={c.cmd} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
-                <span style={{ fontSize: "13px" }}>{c.flag} <strong>{c.cmd}</strong></span>
-                <span style={{ fontSize: "11px", color: "var(--text3)" }}>{c.lang}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="card">
-            <div className="card-title">GESTIÓN DE SERVICIO</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "12px" }}>
-              <button onClick={() => abrirModal('restart')} style={btnStyle("rgba(145,71,255,0.15)", "var(--purple)")}>↻ Reiniciar</button>
-              <button onClick={() => abrirModal('suspend')} style={btnStyle("rgba(255,71,87,0.15)", "var(--red)")}>🛑 Parar Bot</button>
             </div>
-            <p style={{ fontSize: '10px', color: 'var(--text3)', marginTop: '10px', textAlign: 'center' }}>
-              * Al parar el bot, deberá iniciarse manualmente desde Render.
-            </p>
-          </div>
-
+            {queue.length === 0 ? <EmptyState /> : <div className="bot-table-wrap"><table className="bot-table">
+              <thead><tr><th>Pos.</th><th>Usuario</th><th>Mensaje</th><th>Voz</th><th>Estado</th></tr></thead>
+              <tbody>{queue.map((entry, index) => <tr key={entry.id || `${entry.usuario}-${index}`} className={entry.id === currentId ? "is-playing" : ""}>
+                <td><span className="queue-position">{index + 1}</span></td><td><strong>{entry.usuario || "Anónimo"}</strong></td><td><span className="queue-message">{entry.mensaje}</span></td><td>{LANGUAGES[entry.idioma] || entry.idioma || "Auto"}</td><td><StatePill state={entry.id === currentId ? "playing" : entry.estado} /></td>
+              </tr>)}</tbody>
+            </table></div>}
+          </article>
         </div>
+
+        <aside className="bot-side-stack">
+          <article className="card bot-runtime-card"><div className="bot-card-heading"><h2>Motor de voz</h2></div><dl className="bot-detail-list">
+            <div><dt>Proveedor</dt><dd>{provider}</dd></div><div><dt>Listos</dt><dd>{queueStats.listo || 0}</dd></div><div><dt>Generando</dt><dd>{queueStats.generando || 0}</dd></div><div><dt>Instancia</dt><dd className="mono">{stats.instancia || "—"}</dd></div>
+          </dl></article>
+          <article className="card bot-language-card"><div className="bot-card-heading"><h2>Idiomas</h2><p>Distribución de la cola actual.</p></div><div className="language-list">{languageRows.map((item) => <div key={item.id}><span>{item.label}</span><div><i style={{ width: `${queue.length ? Math.max(6, (item.count / queue.length) * 100) : 0}%` }} /></div><strong>{item.count}</strong></div>)}</div></article>
+          {user?.role === "admin" && <article className="card bot-service-card">
+            <div className="bot-card-heading"><h2>Servicio</h2><p>Solo administradores. Estas acciones afectan la instancia completa.</p></div>
+            {serviceAction ? <div className="bot-confirm-box" role="alert"><strong>{serviceAction === "restart" ? "¿Reiniciar el bot?" : "¿Suspender el bot?"}</strong><span>{serviceAction === "restart" ? "Puede tardar cerca de un minuto en volver." : "Tendrás que reanudarlo desde el proveedor de hosting."}</span><div><button type="button" onClick={() => setServiceAction(null)} disabled={serviceBusy}>Cancelar</button><button type="button" onClick={manageService} disabled={serviceBusy}>{serviceBusy ? "Procesando…" : "Confirmar"}</button></div></div> : <div className="bot-service-actions"><button type="button" onClick={() => setServiceAction("restart")} disabled={stale}><RefreshIcon />Reiniciar</button><button type="button" className="danger" onClick={() => setServiceAction("suspend")} disabled={stale}><StopIcon />Suspender</button></div>}
+          </article>}
+        </aside>
       </div>
-    </div>
+    </section>
   );
 }
 
-// ── Estilos ──
-const overlayStyle = {
-  position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
-  backgroundColor: "rgba(0,0,0,0.85)", display: "flex", justifyContent: "center",
-  alignItems: "center", zIndex: 1000, backdropFilter: "blur(8px)"
-};
-
-const modalStyle = {
-  width: "420px", padding: "24px", border: "1px solid var(--border)",
-  boxShadow: "0 20px 60px rgba(0,0,0,0.6)", animation: "modalIn 0.25s ease"
-};
-
-// ── Componentes de UI ──
-function StatCard({ label, value, sub, color }) {
-  return (
-    <div className="card" style={{ padding: "16px" }}>
-      <div style={{ fontSize: "11px", color: "var(--text3)", textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: "22px", fontWeight: 700, color, margin: "4px 0" }}>{value}</div>
-      <div style={{ fontSize: "11px", color: "var(--text3)" }}>{sub}</div>
-    </div>
-  );
+function Metric({ label, value, detail, icon, state = "" }) { return <article className={`bot-metric ${state}`}><div className="bot-metric-icon"><MetricIcon name={icon} /></div><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>; }
+function StatePill({ state }) { const labels = { playing: "Reproduciendo", listo: "Listo", generando: "Generando", finalized: "Finalizado" }; return <span className={`bot-state-pill ${state || "pending"}`}>{labels[state] || "Pendiente"}</span>; }
+function PanelLoading({ label }) { return <div className="card bot-loading" role="status"><span className="spinner" /><p>{label}…</p></div>; }
+function PanelUnavailable({ message, onRetry, busy }) { return <div className="card bot-unavailable" role="alert"><StatusIcon type="error" /><div><h2>TTS Bot no está disponible</h2><p>{message || "Revisa la URL y el token de la integración en el backend."}</p></div><button className="refresh-btn" type="button" onClick={onRetry} disabled={busy}><RefreshIcon />Reintentar</button></div>; }
+function Notice({ notice, onClose }) { return <div className={`bot-notice ${notice.type}`} role={notice.type === "error" ? "alert" : "status"}><StatusIcon type={notice.type} /><span>{notice.text}</span><button type="button" onClick={onClose} aria-label="Cerrar aviso"><CloseIcon /></button></div>; }
+function EmptyState() { return <div className="bot-empty"><QueueIcon /><strong>La cola está vacía</strong><p>Los mensajes enviados desde Twitch o desde este panel aparecerán aquí.</p></div>; }
+function MetricIcon({ name }) {
+  if (name === "monitor") return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>;
+  if (name === "pulse") return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>;
+  if (name === "users") return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+  return <QueueIcon />;
 }
-
-function QueueItem({ entry, position }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: "8px" }}>
-      <span style={{ fontSize: "11px", color: "var(--purple)", fontWeight: 700, width: "20px" }}>{position}</span>
-      <span style={{ fontSize: "16px" }}>{FLAGS[entry.idioma]}</span>
-      <span style={{ fontWeight: 600, color: "var(--purple)", minWidth: "80px" }}>{entry.usuario}</span>
-      <span style={{ fontSize: "13px", color: "var(--text2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.mensaje}</span>
-    </div>
-  );
-}
-
-function LanguageRow({ lang, count, max }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-      <span style={{ width: "20px" }}>{FLAGS[lang]}</span>
-      <div style={{ flex: 1, height: "6px", background: "var(--border)", borderRadius: "10px" }}>
-        <div style={{ width: `${(count / max) * 100}%`, height: "100%", background: "var(--purple)", borderRadius: "10px" }} />
-      </div>
-      <span style={{ fontSize: "11px", color: "var(--text3)", minWidth: "15px" }}>{count}</span>
-    </div>
-  );
-}
-
-function PulseDot({ active }) {
-  return <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: active ? "var(--green)" : "var(--text3)", display: "inline-block" }} />;
-}
-
-function btnStyle(bg, color) {
-  return { background: bg, color, border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 700, transition: "0.2s" };
-}
+function QueueIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1" fill="currentColor" stroke="none"/></svg>; }
+function RefreshIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5"/></svg>; }
+function TrashIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></svg>; }
+function StopIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>; }
+function SendIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>; }
+function CloseIcon() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 6 12 12M18 6 6 18"/></svg>; }
+function StatusIcon({ type }) { return type === "success" ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg> : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/></svg>; }

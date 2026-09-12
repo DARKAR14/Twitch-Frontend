@@ -179,7 +179,7 @@ export default function VIPManager() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div className="vip-manager-panel" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
       {/* Resumen */}
       <div style={{

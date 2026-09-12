@@ -54,9 +54,11 @@ export default function ChannelEditor() {
         const { data } = await api.get(`/channel/search-categories?q=${encodeURIComponent(gameQuery)}`);
         setCategories(data.categories || []);
         setShowCats(true);
-      } catch {}
+      } catch {
+        // La búsqueda se reintentará cuando cambie la consulta.
+      }
     }, 350);
-  }, [gameQuery]);
+  }, [gameQuery, selectedGame?.name]);
 
   // Cerrar dropdown al hacer clic fuera
   useEffect(() => {

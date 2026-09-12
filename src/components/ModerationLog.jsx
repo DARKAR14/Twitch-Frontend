@@ -67,6 +67,7 @@ export default function ModerationLog() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
   }, [fetchData]);
 
@@ -114,7 +115,7 @@ export default function ModerationLog() {
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+    <div className="moderation-panel" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
       {/* Resumen */}
       {data?.summary && (
@@ -146,7 +147,7 @@ export default function ModerationLog() {
           </svg>
           Log de actividad
           {liveEntries.length > 0 && (
-            <span style={{ marginLeft: "6px", fontSize: "11px", background: "rgba(145,70,255,0.15)", color: "var(--purple)", padding: "2px 8px", borderRadius: "100px", border: "1px solid var(--purple-border)" }}>
+            <span style={{ marginLeft: "6px", fontSize: "11px", background: "rgba(255,255,255,0.08)", color: "var(--purple)", padding: "2px 8px", borderRadius: "100px", border: "1px solid var(--purple-border)" }}>
               ⚡ En vivo
             </span>
           )}

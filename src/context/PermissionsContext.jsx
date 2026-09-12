@@ -1,5 +1,6 @@
 // src/context/PermissionsContext.jsx
-import { createContext, useContext, useState, useEffect } from "react";
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useCallback, useContext, useState, useEffect } from "react";
 import { api, getSocket } from "../lib/api";
 import { useAuth } from "./AuthContext";
 
@@ -14,11 +15,12 @@ export function PermissionsProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!user) { setPermissions(null); setLoading(false); return; }
 
     // Admin siempre tiene todo — no necesita consultar
     if (user.role === "admin") {
-      setPermissions({ clips: true, chat: true, stats: true, moderation: true });
+      setPermissions({ clips: true, chat: true, stats: true, moderation: true, tts: true, risitas: true });
       setLoading(false);
       return;
     }
@@ -28,7 +30,7 @@ export function PermissionsProvider({ children }) {
       .then(({ data }) => setPermissions(data.permissions))
       .catch(() => {
         // Si falla, dar permisos por defecto
-        setPermissions({ clips: true, chat: true, stats: true, moderation: true });
+        setPermissions({ clips: true, chat: true, stats: true, moderation: true, tts: true, risitas: false });
       })
       .finally(() => setLoading(false));
   }, [user]);
@@ -53,13 +55,13 @@ export function PermissionsProvider({ children }) {
   /**
    * Verifica si el usuario puede ver un tab específico
    */
-  function canSee(tabId) {
+  const canSee = useCallback((tabId) => {
     if (!user) return false;
     if (user.role === "admin") return true;
     if (ALWAYS_VISIBLE.includes(tabId)) return true;
     if (!permissions) return false;
     return permissions[tabId] === true;
-  }
+  }, [permissions, user]);
 
   return (
     <PermissionsContext.Provider value={{ permissions, loading, canSee }}>
