@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 // src/context/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from "react";
-import { api, connectSocket, disconnectSocket } from "../lib/api";
+import { api, authSession, connectSocket, disconnectSocket } from "../lib/api";
 
 const AuthContext = createContext(null);
 
@@ -10,19 +10,35 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get("/auth/me")
+    let active = true;
+    authSession.initialize()
+      .then(() => api.get("/auth/me"))
       .then(({ data }) => {
-        if (data.authenticated) {
+        if (active && data.authenticated) {
           setUser(data.user);
           connectSocket();
         }
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!user || !authSession.expiresAt()) return;
+    const timer = window.setInterval(() => {
+      if (Date.now() >= authSession.expiresAt()) {
+        authSession.clear();
+        disconnectSocket();
+        setUser(null);
+      }
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [user]);
 
   const logout = async () => {
     await api.post("/auth/logout").catch(() => {});
+    authSession.clear();
     disconnectSocket();
     setUser(null);
   };

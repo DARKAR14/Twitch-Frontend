@@ -172,6 +172,17 @@ export default function TTSPanel() {
         </div>
 
         <aside className="bot-side-stack">
+          <article className="card bot-language-card">
+            <div className="bot-card-heading"><h2>Top usuarios</h2><p>Mensajes en la cola actual.</p></div>
+            <div className="language-list">{Object.entries(queue.reduce((counts, entry) => {
+              const name = entry.usuario || "Anónimo";
+              counts[name] = (counts[name] || 0) + 1;
+              return counts;
+            }, Object.create(null))).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count], index, rows) => (
+              <div key={name}><span>{name}</span><div><i style={{ width: `${(count / rows[0][1]) * 100}%` }} /></div><strong>{count}</strong></div>
+            ))}</div>
+            {queue.length === 0 && <p>Sin mensajes pendientes.</p>}
+          </article>
           <article className="card bot-runtime-card"><div className="bot-card-heading"><h2>Motor de voz</h2></div><dl className="bot-detail-list">
             <div><dt>Proveedor</dt><dd>{provider}</dd></div><div><dt>Listos</dt><dd>{queueStats.listo || 0}</dd></div><div><dt>Generando</dt><dd>{queueStats.generando || 0}</dd></div><div><dt>Instancia</dt><dd className="mono">{stats.instancia || "—"}</dd></div>
           </dl></article>
