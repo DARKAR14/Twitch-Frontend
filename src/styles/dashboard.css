@@ -1422,8 +1422,12 @@ textarea:focus {
   transform: translateX(16px);
 }
 
-.permission-switch:disabled {
+.permission-switch[aria-busy="true"] {
   cursor: wait;
+}
+
+.permission-switch:disabled:not([aria-busy="true"]) {
+  cursor: not-allowed;
   opacity: 0.5;
 }
 

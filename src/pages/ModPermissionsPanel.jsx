@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, getSocket } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
-function PermissionSwitch({ enabled, onChange, loading, label }) {
+function PermissionSwitch({ enabled, onChange, loading, disabled, label }) {
   return (
     <button
       className={`permission-switch ${enabled ? "enabled" : ""}`}
@@ -10,7 +11,9 @@ function PermissionSwitch({ enabled, onChange, loading, label }) {
       aria-checked={enabled}
       aria-label={label}
       onClick={onChange}
-      disabled={loading}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      title={disabled ? "No tienes permiso para modificar esta opción" : undefined}
     >
       <span />
     </button>
@@ -18,6 +21,8 @@ function PermissionSwitch({ enabled, onChange, loading, label }) {
 }
 
 export default function ModPermissionsPanel() {
+  const { user } = useAuth();
+  const [canDelegate, setCanDelegate] = useState(false);
   const [mods, setMods] = useState([]);
   const [canEdit, setCanEdit] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -33,6 +38,7 @@ export default function ModPermissionsPanel() {
       const { data } = await api.get("/modpermissions/all");
       setMods(data.mods || []);
       setCanEdit(data.can_edit === true);
+      setCanDelegate(data.can_delegate === true);
       setTabs(data.tabs || []);
       setNotice(null);
     } catch (error) {
@@ -52,9 +58,17 @@ export default function ModPermissionsPanel() {
       setMods((current) => current.map((mod) => mod.user_id === data.mod_id ? { ...mod, permissions: data.permissions } : mod));
       setNotice({ type: "success", text: `Permiso ${data.tab} ${data.enabled ? "activado" : "desactivado"}.` });
     };
+    const refreshOwnPermissions = () => {
+      setCanEdit(false);
+      fetchData();
+    };
+    socket.on("permissions:updated", refreshOwnPermissions);
     socket.on("modpermissions:changed", handler);
-    return () => socket.off("modpermissions:changed", handler);
-  }, []);
+    return () => {
+      socket.off("modpermissions:changed", handler);
+      socket.off("permissions:updated", refreshOwnPermissions);
+    };
+  }, [fetchData]);
 
   async function handleToggle(mod, tab, currentValue) {
     if (!canEdit) return;
@@ -108,7 +122,11 @@ export default function ModPermissionsPanel() {
         </div>
       )}
 
-      {!loading && !loadError && !canEdit && <p>Solo lectura. El administrador puede modificar los permisos.</p>}
+      {!loading && !loadError && !canEdit && <p>Solo lectura. El administrador principal puede habilitarte Gestionar permisos.</p>}
+
+      {!loading && !loadError && canEdit && <p>{canDelegate
+        ? "Activa Gestionar permisos para autorizar a un moderador a editar los permisos de otros."
+        : "Puedes editar los permisos de otros moderadores. Solo el administrador principal puede conceder o retirar Gestionar permisos."}</p>}
 
       <div className="card permissions-card">
         {loading ? (
@@ -136,7 +154,8 @@ export default function ModPermissionsPanel() {
                       <div className="permission-cell" role="gridcell" key={tab.id}>
                         <PermissionSwitch
                           enabled={enabled}
-                          loading={!canEdit || Boolean(toggling[key])}
+                          loading={Boolean(toggling[key])}
+                          disabled={!canEdit || (!canDelegate && (mod.user_id === user?.id || tab.ownerOnly === true))}
                           label={`${enabled ? "Desactivar" : "Activar"} ${tab.label} para ${mod.user_name}`}
                           onChange={() => handleToggle(mod, tab, enabled)}
                         />
@@ -144,7 +163,7 @@ export default function ModPermissionsPanel() {
                       </div>
                     );
                   })}
-                  <div className="permission-reset-cell" role="gridcell"><button type="button" disabled={!canEdit} onClick={() => handleReset(mod)} aria-label={`Restablecer permisos de ${mod.user_name}`}><ResetIcon />Reset</button></div>
+                  <div className="permission-reset-cell" role="gridcell"><button type="button" disabled={!canEdit || (!canDelegate && mod.user_id === user?.id)} onClick={() => handleReset(mod)} aria-label={`Restablecer permisos de ${mod.user_name}`}><ResetIcon />Reset</button></div>
                 </div>
               ))}
             </div>

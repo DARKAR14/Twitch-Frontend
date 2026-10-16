@@ -60,6 +60,7 @@ export function PermissionsProvider({ children }) {
     if (user.role === "admin") return true;
     if (ALWAYS_VISIBLE.includes(tabId)) return true;
     if (!permissions) return false;
+    if (tabId === "modperms" && permissions.manage_permissions === true) return true;
     return permissions[tabId] === true;
   }, [permissions, user]);
 
