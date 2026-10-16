@@ -19,6 +19,8 @@ function PermissionSwitch({ enabled, onChange, loading, label }) {
 
 export default function ModPermissionsPanel() {
   const [mods, setMods] = useState([]);
+  const [canEdit, setCanEdit] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [tabs, setTabs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState({});
@@ -26,12 +28,16 @@ export default function ModPermissionsPanel() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const { data } = await api.get("/modpermissions/all");
       setMods(data.mods || []);
+      setCanEdit(data.can_edit === true);
       setTabs(data.tabs || []);
       setNotice(null);
     } catch (error) {
+      setLoadError(true);
+      setCanEdit(false);
       setNotice({ type: "error", text: error?.response?.data?.error || "No se pudo cargar la matriz de permisos." });
     } finally {
       setLoading(false);
@@ -51,6 +57,7 @@ export default function ModPermissionsPanel() {
   }, []);
 
   async function handleToggle(mod, tab, currentValue) {
+    if (!canEdit) return;
     const key = `${mod.user_id}:${tab.id}`;
     setToggling((current) => ({ ...current, [key]: true }));
     setMods((current) => current.map((item) => item.user_id === mod.user_id
@@ -71,6 +78,7 @@ export default function ModPermissionsPanel() {
   }
 
   async function handleReset(mod) {
+    if (!canEdit) return;
     try {
       const { data } = await api.put(`/modpermissions/${mod.user_id}/reset`);
       setMods((current) => current.map((item) => item.user_id === mod.user_id ? { ...item, permissions: data.permissions } : item));
@@ -100,9 +108,13 @@ export default function ModPermissionsPanel() {
         </div>
       )}
 
+      {!loading && !loadError && !canEdit && <p>Solo lectura. El administrador puede modificar los permisos.</p>}
+
       <div className="card permissions-card">
         {loading ? (
           <div className="bot-loading" role="status"><span className="spinner" /><p>Cargando permisos…</p></div>
+        ) : loadError ? (
+          <div className="bot-empty"><AlertIcon /><strong>No se pudieron cargar los permisos</strong><p>Vuelve a consultar la lista. No se han borrado los permisos guardados.</p></div>
         ) : mods.length === 0 ? (
           <div className="bot-empty"><UsersIcon /><strong>No hay moderadores</strong><p>Cuando Twitch devuelva el equipo, aparecerá en esta matriz.</p></div>
         ) : (
@@ -119,12 +131,12 @@ export default function ModPermissionsPanel() {
                   <div className="permission-mod" role="rowheader"><span /><div><strong>@{mod.user_name}</strong><small>{mod.user_id}</small></div></div>
                   {tabs.map((tab) => {
                     const key = `${mod.user_id}:${tab.id}`;
-                    const enabled = mod.permissions?.[tab.id] ?? true;
+                    const enabled = mod.permissions?.[tab.id] === true;
                     return (
                       <div className="permission-cell" role="gridcell" key={tab.id}>
                         <PermissionSwitch
                           enabled={enabled}
-                          loading={Boolean(toggling[key])}
+                          loading={!canEdit || Boolean(toggling[key])}
                           label={`${enabled ? "Desactivar" : "Activar"} ${tab.label} para ${mod.user_name}`}
                           onChange={() => handleToggle(mod, tab, enabled)}
                         />
@@ -132,7 +144,7 @@ export default function ModPermissionsPanel() {
                       </div>
                     );
                   })}
-                  <div className="permission-reset-cell" role="gridcell"><button type="button" onClick={() => handleReset(mod)} aria-label={`Restablecer permisos de ${mod.user_name}`}><ResetIcon />Reset</button></div>
+                  <div className="permission-reset-cell" role="gridcell"><button type="button" disabled={!canEdit} onClick={() => handleReset(mod)} aria-label={`Restablecer permisos de ${mod.user_name}`}><ResetIcon />Reset</button></div>
                 </div>
               ))}
             </div>

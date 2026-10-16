@@ -115,6 +115,7 @@ export default function SpotifyPanel() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
+  const [statusError, setStatusError] = useState(null);
   const [status, setStatus] = useState(null); // null = cargando
   const [queue, setQueue] = useState([]);
   const [current, setCurrent] = useState(null);
@@ -127,6 +128,7 @@ export default function SpotifyPanel() {
   const pollRef = useRef(null);
 
   const fetchStatus = useCallback(async () => {
+    setStatusError(null);
     try {
       const { data } = await api.get("/spotify/status");
       setStatus(data);
@@ -134,7 +136,12 @@ export default function SpotifyPanel() {
         setCurrent(data.current);
         setQueue(data.queue || []);
       }
-    } catch { setStatus({ connected: false }); }
+    } catch (error) {
+      setStatusError({
+        message: error.response?.data?.error || "No se pudo consultar Spotify. Revisa la conexión e inténtalo de nuevo.",
+        reauth: error.response?.data?.reauth_required === true,
+      });
+    }
   }, []);
 
   const fetchQueue = useCallback(async () => {
@@ -229,6 +236,14 @@ export default function SpotifyPanel() {
       setTimeout(() => setOverlayCopyState("idle"), 2200);
     }
   };
+
+  if (statusError) return (
+    <div className="spotify-panel">
+      <div className="bot-notice error" role="alert">{statusError.message}</div>
+      {statusError.reauth && isAdmin && <ConnectSection />}
+      <button type="button" className="refresh-btn" onClick={fetchStatus}>Volver a consultar</button>
+    </div>
+  );
 
   // Cargando
   if (!status) return <div className="spinner" />;
